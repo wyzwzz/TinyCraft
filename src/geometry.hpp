@@ -1,6 +1,19 @@
 #pragma once
+#include "math.hpp"
 
+struct Vertex{
+    float3 pos;
+    float3 normal;
+    float2 uv;
+};
+struct Triangle{
+    Vertex vertices[3];
+};
 
-class Frustum{
+struct Frustum{
+
+};
+
+struct BoundBox3D{
 
 };
