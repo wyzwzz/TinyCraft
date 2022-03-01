@@ -70,7 +70,7 @@ class Chunk{
 
         void generateVisibleFaces();
 
-        void genVisibleFaceBuffer(const std::vector<Triangle>&);
+
 
         uint32_t getDrawBuffer();
 
@@ -79,6 +79,10 @@ class Chunk{
         Map& getMap();
 
         void deleteDrawBuffer();
+
+    private:
+
+    void genVisibleFaceBuffer(const std::vector<Triangle>&);
 
     private:
         BoundBox3D bbox;

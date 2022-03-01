@@ -31,7 +31,9 @@ class Game{
         void initEventHandle();
         void mainLoop();
         std::queue<Chunk*> getVisibleChunks();
-
+        void generateInitialWorld();
+        void createChunk(int p,int q);//生成一个新的随机的chunk
+        void loadChunk(int p,int q);//从数据库中加载
     private:
         void testGenChunk();
     private:

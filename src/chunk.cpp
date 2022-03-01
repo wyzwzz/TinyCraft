@@ -100,7 +100,8 @@ size_t Chunk::getDrawFaceNum() const {
 }
 
 bool Chunk::isBlockOpaque(const Map::MapEntry& block_index) {
-    assert(isValidBlock(block_index));
+//    assert(isValidBlock(block_index));
+    if(!isValidBlock(block_index)) return false;
     auto find_value = block_map.find(block_index);
     //0 represent not exits
     if(find_value == BLOCK_STATUS_EMPTY){

@@ -1,7 +1,9 @@
 #include "game.hpp"
 
 #include <cmath>
-
+extern "C"{
+#include <noise.h>
+}
 # define M_PI           3.14159265358979323846f
 void glfwKeyCallback(GLFWwindow* window,int key,int scancode,int action,int mods){
     Game::KeyCallback(window,key,scancode,action,mods);
@@ -27,8 +29,9 @@ Game::Game(int argc,char** argv){
 }
 
 void Game::run(){
+    generateInitialWorld();
 
-    testGenChunk();
+//    testGenChunk();
     GL_CHECK
 
     mainLoop();
@@ -223,4 +226,39 @@ void Game::handleMouseInput() {
         glfwGetCursorPos(window,&px,&py);
     }
 
+}
+
+void Game::generateInitialWorld() {
+    createChunk(0,0);
+    createChunk(0,1);
+    createChunk(1,0);
+    createChunk(1,1);
+}
+/**
+ * chunk里的每一个block都有全局唯一的坐标 所以padding的部分也可以得到 保证是正确的
+ */
+void Game::createChunk(int p, int q) {
+    Chunk chunk({p,q});
+    int chunk_origin_x = p * Chunk::ChunkBlockSizeX;
+    int chunk_origin_z = q * Chunk::ChunkBlockSizeZ;
+    int pad =Chunk::ChunkPadding;
+    for(int dx = -pad;dx < Chunk::ChunkBlockSizeX+pad; dx++){
+        for(int dz = -pad;dz < Chunk::ChunkBlockSizeZ+pad;dz++){
+            int x = chunk_origin_x + dx;
+            int z = chunk_origin_z + dz;
+            float f = simplex2(x * 0.01, z * 0.01, 4, 0.5, 2);
+            float g = simplex2(-x * 0.01, -z * 0.01, 2, 0.9, 2);
+            int mh = g * 32 + 16;
+            int h = f * mh;
+            int t = 12;
+            if (h <= t) {
+                h = t;
+            }
+            for(int y = 0;y<h;y++){
+                chunk.setBlock({dx+pad,y,dz+pad,1});
+            }
+        }
+    }
+    chunk.generateVisibleFaces();
+    this->chunks.push_back(chunk);
 }

@@ -17,6 +17,7 @@ set(
     TinyCraft_SRCS
     ${TinyCraft_SRCS}
     deps/glad/src/glad.c
+    deps/noise/noise.c
 )
 add_executable(TinyCraft ${TinyCraft_SRCS})
 
@@ -29,6 +30,7 @@ target_link_libraries(
 target_include_directories(
     TinyCraft PRIVATE
     deps/glad/include
+        deps/noise
 )
 
 target_compile_features(
