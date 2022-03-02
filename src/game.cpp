@@ -5,6 +5,10 @@ extern "C"{
 #include <noise.h>
 }
 # define M_PI           3.14159265358979323846f
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 void glfwKeyCallback(GLFWwindow* window,int key,int scancode,int action,int mods){
     Game::KeyCallback(window,key,scancode,action,mods);
 }
@@ -30,7 +34,8 @@ Game::Game(int argc,char** argv){
 
 void Game::run(){
     generateInitialWorld();
-
+    loadBlockTexture();
+    createTextureSampler();
 //    testGenChunk();
     GL_CHECK
 
@@ -64,6 +69,8 @@ void Game::initGLContext(){
     }
     glEnable(GL_DEPTH_TEST);
     GL_CHECK
+
+    //todo select nvidia gpu
 }
 
 void Game::initEventHandle(){
@@ -119,8 +126,12 @@ void Game::initEventHandle(){
 }
 
 void Game::mainLoop(){
-
+    double last_t = glfwGetTime();
     while(!glfwWindowShouldClose(window)){
+        auto cur_t = glfwGetTime();
+        auto delta_t = cur_t - last_t;
+        last_t = cur_t;
+        std::cout<<"fps "<<int(1.0/delta_t)<<std::endl;
 
         glClearColor(0.f,0.f,0.f,0.f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -135,6 +146,7 @@ void Game::mainLoop(){
         shader.setMat4("model",model_matrix);
         shader.setMat4("view",view_matrix);
         shader.setMat4("proj",proj_matrix);
+        shader.setInt("BlockTexture",0);
         auto visible_chunks = getVisibleChunks();
         while(!visible_chunks.empty()){
             auto chunk = visible_chunks.front();
@@ -143,12 +155,13 @@ void Game::mainLoop(){
             auto buffer_handle = chunk->getDrawBuffer();
             auto draw_num = chunk->getDrawFaceNum() * 2 * 3;
             glBindVertexArray(buffer_handle);
-            glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
+//            glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
             glDrawArrays(GL_TRIANGLES,0,draw_num);
         }
         GL_CHECK
         glfwSwapBuffers(window);
         glfwPollEvents();
+
     }
 }
 
@@ -251,14 +264,45 @@ void Game::createChunk(int p, int q) {
             int mh = g * 32 + 16;
             int h = f * mh;
             int t = 12;
+            int w = 1;
             if (h <= t) {
                 h = t;
+                w = 2;
             }
             for(int y = 0;y<h;y++){
-                chunk.setBlock({dx+pad,y,dz+pad,1});
+                chunk.setBlock({dx+pad,y,dz+pad,w});
             }
         }
     }
     chunk.generateVisibleFaces();
     this->chunks.push_back(chunk);
 }
+
+void Game::loadBlockTexture() {
+    const std::string texture_path = AssetsPath + "textures/texture.png";
+
+    stbi_set_flip_vertically_on_load(true);
+
+    int width = 0,height = 0,channels = 0;
+
+    auto data = stbi_load(texture_path.c_str(),&width,&height,&channels,0);
+    assert(channels == 4);
+    assert(data);
+    glCreateTextures(GL_TEXTURE_2D,1,&texture);
+    glBindTexture(GL_TEXTURE_2D,texture);
+    glBindTextureUnit(0,texture);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
+    stbi_image_free(data);
+    GL_CHECK
+}
+
+void Game::createTextureSampler() {
+    glCreateSamplers(1,&sampler);
+    glSamplerParameterf(sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glSamplerParameterf(sampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glSamplerParameterf(sampler,GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
+    glSamplerParameterf(sampler,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glSamplerParameterf(sampler,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glBindSampler(0,sampler);
+}
+

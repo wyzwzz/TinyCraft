@@ -34,6 +34,8 @@ class Game{
         void generateInitialWorld();
         void createChunk(int p,int q);//生成一个新的随机的chunk
         void loadChunk(int p,int q);//从数据库中加载
+        void loadBlockTexture();
+        void createTextureSampler();
     private:
         void testGenChunk();
     private:
@@ -45,4 +47,6 @@ class Game{
         Camera camera;
         Shader shader;
         bool exclusive{true};
+        uint32_t texture{0};
+        uint32_t sampler{0};
 };

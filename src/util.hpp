@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 #include <glad/glad.h>
+#include <chrono>
+#include <iostream>
 inline std::string GetGLErrorStr(GLenum gl_error){
     std::string error;
     switch ( gl_error ) {
@@ -114,3 +116,11 @@ template <typename T,typename... Others>
 size_t hash(const T& t, const Others&... others){
     return hash_impl::hash(std::hash<T>()(t),others...);
 }
+
+
+#define START_TIMER auto __start = std::chrono::steady_clock::now();
+
+#define STOP_TIMER(msg) \
+auto __end = std::chrono::steady_clock::now();\
+auto __t = std::chrono::duration_cast<std::chrono::milliseconds>(__end-__start);\
+std::cout<<msg<<" cost time: "<<__t.count()<<"ms"<<std::endl;

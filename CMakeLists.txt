@@ -31,6 +31,7 @@ target_include_directories(
     TinyCraft PRIVATE
     deps/glad/include
         deps/noise
+        deps
 )
 
 target_compile_features(

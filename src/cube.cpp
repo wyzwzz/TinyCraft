@@ -1,5 +1,5 @@
 #include "cube.hpp"
-
+#include "item.hpp"
 /*
  *                y
  *                | 
@@ -46,7 +46,14 @@ static constexpr float3 CubeNormals[6]={
         {-1.f,0.f,0.f},
         {0.f,1.f,0.f}
 };
-
+static constexpr float2 UVs[6][4] = {
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{0,0},{1,0},{1,1},{0,1}}
+};
 void MakeCube(){
 
 }
@@ -60,8 +67,16 @@ std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block
     float block_pos_z = chunk_origin_z + static_cast<float>(block_idx.z) - Chunk::ChunkPadding+0.5f;
     float block_pos_y = static_cast<float>(block_idx.y) + 0.5f;//y has no padding
     float3 block_center_pos = {block_pos_x,block_pos_y,block_pos_z};
+    int w = block_idx.w;
+    //texture uv
+    static float s = 0.0625f;
+    static float a = 0.f + 1.f / 2048.f;
+    static float b = s - 1.f / 2048.f;
+
     for(int i =0;i<6;i++){
         if(expose[i]==1){
+            float du = static_cast<float>(blocks[w][i] % 16) * s;
+            float dv = static_cast<float>(blocks[w][i] / 16) * s;
             triangles.emplace_back(Triangle{});
             auto& tri1 = triangles.back();
             tri1.vertices[0].pos = CubeOffsets[i][0] + block_center_pos;
@@ -70,6 +85,13 @@ std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block
             tri1.vertices[0].normal = CubeNormals[i];
             tri1.vertices[1].normal = CubeNormals[i];
             tri1.vertices[2].normal = CubeNormals[i];
+            tri1.vertices[0].uv = float2{du + (UVs[i][0].x ? b : a),
+                                         dv + (UVs[i][0].y ? b : a)};
+            tri1.vertices[1].uv = float2{du + (UVs[i][1].x ? b : a),
+                                         dv + (UVs[i][1].y ? b : a)};
+            tri1.vertices[2].uv = float2{du + (UVs[i][2].x ? b : a),
+                                         dv + (UVs[i][2].y ? b : a)};
+
             triangles.emplace_back(Triangle{});
             auto& tri2 = triangles.back();
             tri2.vertices[0].pos = CubeOffsets[i][2] + block_center_pos;
@@ -78,6 +100,12 @@ std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block
             tri2.vertices[0].normal = CubeNormals[i];
             tri2.vertices[1].normal = CubeNormals[i];
             tri2.vertices[2].normal = CubeNormals[i];
+            tri2.vertices[0].uv = float2{du + (UVs[i][2].x ? b : a),
+                                         dv + (UVs[i][2].y ? b : a)};
+            tri2.vertices[1].uv = float2{du + (UVs[i][3].x ? b : a),
+                                         dv + (UVs[i][3].y ? b : a)};
+            tri2.vertices[2].uv = float2{du + (UVs[i][0].x ? b : a),
+                                         dv + (UVs[i][0].y ? b : a)};
         }
     }
     return triangles;
