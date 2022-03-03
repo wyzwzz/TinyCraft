@@ -18,7 +18,16 @@
  * A:(-1,-1,-1) B:(1,-1,-1) C:(1,-1,1) D:(-1,-1,1)
  * E:(-1,1,-1)  F:(1,1,-1)  G:(1,1,1)  H:(-1,1,1)
  */
-
+static constexpr const float3 CubeVertices[8] = {
+        {-0.5f,-0.5f,-0.5f},//A
+        {0.5f,-0.5f,-0.5f},//B
+        {0.5f,-0.5f,0.5f},//C
+        {-0.5f,-0.5f,0.5f},//D
+        {-0.5f,0.5f,-0.5f},//E
+        {0.5f,0.5f,-0.5f},//F
+        {0.5f,0.5f,0.5f},//G
+        {-0.5f,0.5f,0.5f}//H
+};
 /**
  *@brief 立方体的顶点位置，每个面由两个三角形组成
  */
@@ -109,4 +118,25 @@ std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block
         }
     }
     return triangles;
+}
+
+//24 point float3
+std::vector<float3> MakeCubeWireframe(const Chunk::Index &chunk_index,const Chunk::Block& block_index){
+    static const int indices[24]={
+        0,1,1,2,2,3,3,0,
+        4,5,5,6,6,7,7,4,
+        0,4,1,5,2,6,3,7
+    };
+    float chunk_origin_x = chunk_index.x * Chunk::ChunkBlockSizeX;
+    float chunk_origin_z = chunk_index.y * Chunk::ChunkBlockSizeZ;
+    //传进来的Block确保不会是边界块
+    float block_pos_x = chunk_origin_x + static_cast<float>(block_index.x) - Chunk::ChunkPadding+0.5f;
+    float block_pos_z = chunk_origin_z + static_cast<float>(block_index.z) - Chunk::ChunkPadding+0.5f;
+    float block_pos_y = static_cast<float>(block_index.y) + 0.5f;//y has no padding
+    float3 block_center_pos = {block_pos_x,block_pos_y,block_pos_z};
+    std::vector<float3> pts(24);
+    for(int i = 0;i < 24;i++){
+        pts[i] = block_center_pos + CubeVertices[indices[i]] * 1.1f;
+    }
+    return pts;
 }

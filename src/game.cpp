@@ -1,5 +1,6 @@
 #include "game.hpp"
-
+#include "ray.hpp"
+#include "cube.hpp"
 #include <cmath>
 extern "C"{
 #include <noise.h>
@@ -29,6 +30,7 @@ Game::Game(int argc,char** argv){
     initEventHandle();
     GL_CHECK
     shader = Shader((ShaderPath+"block_v.glsl").c_str(),(ShaderPath+"block_f.glsl").c_str());
+    wireframe_shader = Shader((ShaderPath+"wireframe_v.glsl").c_str(),(ShaderPath+"wireframe_f.glsl").c_str());
     GL_CHECK
 }
 
@@ -141,6 +143,10 @@ void Game::mainLoop(){
         auto view_matrix = camera.getViewMatrix();
         auto proj_matrix = camera.getProjMatrix();
         auto model_matrix = mat4(1.f);
+
+        //render selected cube wireframe by camera ray
+        renderHitBlock();
+
 
         shader.use();
         shader.setMat4("model",model_matrix);
@@ -304,5 +310,110 @@ void Game::createTextureSampler() {
     glSamplerParameterf(sampler,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glSamplerParameterf(sampler,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glBindSampler(0,sampler);
+}
+
+void Game::renderHitBlock() {
+    auto view_matrix = camera.getViewMatrix();
+    auto proj_matrix = camera.getProjMatrix();
+    auto model_matrix = mat4(1.f);
+
+    //render selected cube wireframe by camera ray
+    Chunk::Index chunk_index{};
+    Chunk::Block block_index{};
+    if(!getHitBlock(chunk_index,block_index)) return;
+
+    generateHitBlockBuffer(chunk_index,block_index);
+
+    wireframe_shader.use();
+    wireframe_shader.setMat4("model",model_matrix);
+    wireframe_shader.setMat4("view",view_matrix);
+    wireframe_shader.setMat4("proj",proj_matrix);
+    glBindVertexArray(block_wireframe_vao);
+    glLineWidth(1);
+    glDrawArrays(GL_LINES,0,24);
+}
+
+void Game::generateHitBlockBuffer(const Chunk::Index& chunk_index,const Chunk::Block& block_index) {
+    static Chunk::Index last_hit_chunk;
+    static Chunk::Block last_hit_block;
+
+
+    if(chunk_index == last_hit_chunk && block_index == last_hit_block){
+        //nothing to do
+    }
+    else{
+        //delete old and generate new
+        deleteBlockWireframeBuffer();
+        generateBlockWireframeBuffer(MakeCubeWireframe(chunk_index,block_index));
+    }
+
+    last_hit_chunk = chunk_index;
+    last_hit_block = block_index;
+}
+
+bool Game::getHitBlock(Chunk::Index &chunk_index, Chunk::Block &block_index) {
+    Ray ray(camera);
+    int steps = ray.radius / ray.step;
+    for(int i = 0;i<steps;i++){
+        auto pos = ray.origin + ray.direction * ray.step * static_cast<float>(i);
+        int chunk_index_x = pos.x / Chunk::ChunkBlockSizeX;
+        int chunk_index_z = pos.z / Chunk::ChunkBlockSizeZ;
+        int block_index_x = pos.x - chunk_index_x * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
+        int block_index_z = pos.z - chunk_index_z * Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
+        int block_index_y = pos.y;
+        if(block_index_y<0 || block_index_y >= Chunk::ChunkSizeY){
+            continue;
+        }
+        int w = getChunk(chunk_index_x,chunk_index_z).queryBlockW(block_index_x,block_index_y,block_index_z);
+        if(w!=BLOCK_STATUS_EMPTY){
+            chunk_index = {chunk_index_x,chunk_index_z};
+            block_index = {block_index_x,block_index_y,block_index_z,w};
+            return true;
+        }
+    }
+    return false;
+}
+
+Chunk &Game::getChunk(int p,int q) {
+    for(auto& chunk:chunks){
+        if(chunk.getIndex() == Chunk::Index{p,q}){
+            return chunk;
+        }
+    }
+    loadChunk(p,q);
+    return getChunk(p,q);
+}
+
+void Game::loadChunk(int p, int q) {
+    //if chunk has store in the db
+
+    //create the new chunk
+    createChunk(p,q);
+}
+
+void Game::generateBlockWireframeBuffer(const std::vector<float3> &pts) {
+    if(block_wireframe_vao || block_wireframe_vbo){
+        deleteBlockWireframeBuffer();
+    }
+    glCreateVertexArrays(1,&block_wireframe_vao);
+    glBindVertexArray(block_wireframe_vao);
+    glCreateBuffers(1,&block_wireframe_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,block_wireframe_vbo);
+    glBufferData(GL_ARRAY_BUFFER,pts.size()*sizeof(float3),pts.data(),GL_STATIC_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*3,(void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+    GL_CHECK
+}
+
+void Game::deleteBlockWireframeBuffer() {
+    if(block_wireframe_vao){
+        glDeleteVertexArrays(1,&block_wireframe_vao);
+        block_wireframe_vao = 0;
+    }
+    if(block_wireframe_vbo){
+        glDeleteBuffers(1,&block_wireframe_vbo);
+        block_wireframe_vbo = 0;
+    }
 }
 

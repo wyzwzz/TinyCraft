@@ -116,3 +116,10 @@ bool Chunk::isValidBlock(const MapEntry &e) {
     return e.x>=0 && e.y>=0 && e.z>=0 && e.x<ChunkSizeX && e.y<ChunkSizeY && e.z<ChunkSizeZ;
 }
 
+int Chunk::queryBlockW(int x, int y, int z) {
+    return block_map.find({x,y,z});
+}
+
+const Chunk::Index& Chunk::getIndex() const{
+    return chunk_index;
+}

@@ -18,16 +18,24 @@ class Chunk{
         struct Index{
             int x;
             int y;
+            bool operator==(const Index& index) const{
+                return x== index.x && y == index.y;
+            }
         };
         struct Block{
             bool operator==(const Block& block) const{
                 return x==block.x && y==block.y && z==block.z && w == block.w;
             }
+            Block()
+            :w(0)
+            {}
             Block(int x,int y,int z,int w):
             x(x),y(y),z(z),w(w){}
             Block(const Map::MapEntry& entry,int w)
             :x(entry.x),y(entry.y),z(entry.z),w(w)
             {}
+//            Block(const Block&) = default;
+//            Block& operator=(const Block&) = default;
             int x;
             int y;
             int z;
@@ -53,7 +61,11 @@ class Chunk{
 
         Chunk(Index);
 
+        const Index& getIndex() const;
+
         void setBlock(const Block& block);
+
+        int queryBlockW(int x,int y,int z);
 
         bool isBlockOpaque(const Map::MapEntry&);
 

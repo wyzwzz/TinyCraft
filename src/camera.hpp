@@ -10,8 +10,8 @@ public:
         return perspective(radians(zoom),aspect,z_near,z_far);
     }
 
-    float3 position{0.f,0.f,10.f};
-    float3 target{0.f,0.f,0.f};
+    float3 position{0.5f,0.5f,10.5f};
+    float3 target{0.1f,0.1f,0.f};
     float3 up{0.f,1.f,0.f};
     float3 right{1.f,0.f,0.f};
     float3 front{0.f,0.f,-1.f};
