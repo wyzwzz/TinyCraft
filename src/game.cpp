@@ -113,7 +113,7 @@ void Game::initEventHandle(){
         if(action !=  GLFW_PRESS) return;
         if(button == GLFW_MOUSE_BUTTON_LEFT){
             if(exclusive){
-
+                onLeftClick();
             }
             else{
                 glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_DISABLED);
@@ -140,12 +140,16 @@ void Game::mainLoop(){
 
         handleMouseInput();
 
+        //re-generate chunk draw buffer after input event
+        updateDirtyChunks();
+
         auto view_matrix = camera.getViewMatrix();
         auto proj_matrix = camera.getProjMatrix();
         auto model_matrix = mat4(1.f);
 
         //render selected cube wireframe by camera ray
         renderHitBlock();
+
 
 
         shader.use();
@@ -414,6 +418,52 @@ void Game::deleteBlockWireframeBuffer() {
     if(block_wireframe_vbo){
         glDeleteBuffers(1,&block_wireframe_vbo);
         block_wireframe_vbo = 0;
+    }
+}
+
+void Game::onLeftClick() {
+    Chunk::Index chunk_index{};
+    Chunk::Block block_index{};
+    if(!getHitBlock(chunk_index,block_index)) return;
+    //update this chunk's block status
+    block_index.w = BLOCK_STATUS_EMPTY;
+    getChunk(chunk_index.x,chunk_index.y).setBlock(block_index);
+    //if this block is boundary then update the neighbor chunk's block
+    updateNeighborChunk(chunk_index,block_index);
+}
+
+void Game::updateDirtyChunks() {
+    for(auto& chunk:chunks){
+        if(chunk.isDirty()){
+            chunk.generateVisibleFaces();
+        }
+    }
+}
+
+void Game::updateNeighborChunk(const Chunk::Index &chunk_index, const Chunk::Block &block_index) {
+    if(block_index.x == 1){
+        getChunk(chunk_index.x-1,chunk_index.y).setBlock({Chunk::ChunkSizeX-1,block_index.y,block_index.z,block_index.w});
+    }
+    if(block_index.x == Chunk::ChunkSizeX - 2){
+        getChunk(chunk_index.x+1,chunk_index.y).setBlock({0,block_index.y,block_index.z,block_index.w});
+    }
+    if(block_index.y == 1){
+        getChunk(chunk_index.x,chunk_index.y-1).setBlock({block_index.x,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    }
+    if(block_index.y == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.x,chunk_index.y+1).setBlock({block_index.x,block_index.y,0,block_index.w});
+    }
+    if(block_index.x == 1 && block_index.y == 1){
+        getChunk(chunk_index.x-1,chunk_index.y-1).setBlock({Chunk::ChunkSizeX-1,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    }
+    if(block_index.x == 1 && block_index.y == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.x - 1,chunk_index.y + 1).setBlock({Chunk::ChunkSizeX-1,block_index.y,0,block_index.w});
+    }
+    if(block_index.x == Chunk::ChunkSizeX-2 && block_index.y == 1){
+        getChunk(chunk_index.x + 1, chunk_index.y -1).setBlock({0,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    }
+    if(block_index.x == Chunk::ChunkSizeX - 2 && block_index.y == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.x + 1,chunk_index.y + 1).setBlock({0,block_index.y,0,block_index.w});
     }
 }
 

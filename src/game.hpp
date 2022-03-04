@@ -42,7 +42,11 @@ class Game{
 
         bool getHitBlock(Chunk::Index& chunk_index,Chunk::Block& block_index);
         Chunk& getChunk(int p,int q);
+        void updateDirtyChunks();
+        void updateNeighborChunk(const Chunk::Index& chunk_index,const Chunk::Block& block_index);
+
     private:
+        void onLeftClick();
         void testGenChunk();
         void deleteBlockWireframeBuffer();
         void generateBlockWireframeBuffer(const std::vector<float3>& pts);

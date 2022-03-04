@@ -80,6 +80,7 @@ class Chunk{
 
         const BoundBox3D& getBoundBox() const;
 
+        //must call after call setBlock or isDirty return true
         void generateVisibleFaces();
 
 

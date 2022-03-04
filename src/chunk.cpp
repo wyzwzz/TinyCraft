@@ -22,6 +22,7 @@ void Chunk::generateVisibleFaces() {
         int expose[6] = {0,0,0,0,0,0};
         auto& block_index = block_item.first;
         auto block_value = block_item.second;
+        if(block_value == BLOCK_STATUS_EMPTY) continue;
         if(isBoundary(block_index)) continue;
         if(!isBlockOpaque({block_index.x,block_index.y-1,block_index.z})){
             expose[0] = 1;
@@ -52,6 +53,10 @@ void Chunk::generateVisibleFaces() {
         visible_triangles.insert(visible_triangles.end(),gen_triangles.begin(),gen_triangles.end());
     }
     genVisibleFaceBuffer(visible_triangles);
+
+    //reset dirty to false
+    this->dirty = false;
+    this->dirty_count = 0;
 }
 
 bool Chunk::isBoundary(const Map::MapEntry& block_index) {
