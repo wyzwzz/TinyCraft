@@ -119,6 +119,14 @@ void Game::initEventHandle(){
                 glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_DISABLED);
             }
         }
+        else if(button == GLFW_MOUSE_BUTTON_RIGHT){
+            if(exclusive){
+                onRightClick();
+            }
+            else{
+                glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_DISABLED);
+            }
+        }
     };
     glfwSetKeyCallback(window,glfwKeyCallback);
     glfwSetCharCallback(window,glfwCharCallback);
@@ -231,11 +239,11 @@ void Game::handleMouseInput() {
         float yoffset = ydelta * camera.move_sense;
         camera.yaw += xoffset;
         camera.pitch += yoffset;
-        if(camera.pitch > 60.f){
-            camera.pitch = 60.f;
+        if(camera.pitch > 89.f){
+            camera.pitch = 89.f;
         }
-        else if(camera.pitch < -60.f){
-            camera.pitch = -60.f;
+        else if(camera.pitch < -89.f){
+            camera.pitch = -89.f;
         }
         camera.front.x = std::cos(camera.pitch * M_PI / 180.f) * std::cos(camera.yaw * M_PI / 180.f);
         camera.front.y = std::sin(camera.pitch * M_PI / 180.f);
@@ -427,7 +435,7 @@ void Game::onLeftClick() {
     if(!getHitBlock(chunk_index,block_index)) return;
     //update this chunk's block status
     block_index.w = BLOCK_STATUS_EMPTY;
-    getChunk(chunk_index.x,chunk_index.y).setBlock(block_index);
+    getChunk(chunk_index.p,chunk_index.q).setBlock(block_index);
     //if this block is boundary then update the neighbor chunk's block
     updateNeighborChunk(chunk_index,block_index);
 }
@@ -442,28 +450,125 @@ void Game::updateDirtyChunks() {
 
 void Game::updateNeighborChunk(const Chunk::Index &chunk_index, const Chunk::Block &block_index) {
     if(block_index.x == 1){
-        getChunk(chunk_index.x-1,chunk_index.y).setBlock({Chunk::ChunkSizeX-1,block_index.y,block_index.z,block_index.w});
+        getChunk(chunk_index.p-1,chunk_index.q).setBlock({Chunk::ChunkSizeX-1,block_index.y,block_index.z,block_index.w});
     }
     if(block_index.x == Chunk::ChunkSizeX - 2){
-        getChunk(chunk_index.x+1,chunk_index.y).setBlock({0,block_index.y,block_index.z,block_index.w});
+        getChunk(chunk_index.p+1,chunk_index.q).setBlock({0,block_index.y,block_index.z,block_index.w});
     }
-    if(block_index.y == 1){
-        getChunk(chunk_index.x,chunk_index.y-1).setBlock({block_index.x,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    if(block_index.z == 1){
+        getChunk(chunk_index.p,chunk_index.q-1).setBlock({block_index.x,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
     }
-    if(block_index.y == Chunk::ChunkSizeZ - 2){
-        getChunk(chunk_index.x,chunk_index.y+1).setBlock({block_index.x,block_index.y,0,block_index.w});
+    if(block_index.z == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.p,chunk_index.q+1).setBlock({block_index.x,block_index.y,0,block_index.w});
     }
-    if(block_index.x == 1 && block_index.y == 1){
-        getChunk(chunk_index.x-1,chunk_index.y-1).setBlock({Chunk::ChunkSizeX-1,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    if(block_index.x == 1 && block_index.z == 1){
+        getChunk(chunk_index.p-1,chunk_index.q-1).setBlock({Chunk::ChunkSizeX-1,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
     }
-    if(block_index.x == 1 && block_index.y == Chunk::ChunkSizeZ - 2){
-        getChunk(chunk_index.x - 1,chunk_index.y + 1).setBlock({Chunk::ChunkSizeX-1,block_index.y,0,block_index.w});
+    if(block_index.x == 1 && block_index.z == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.p - 1,chunk_index.q + 1).setBlock({Chunk::ChunkSizeX-1,block_index.y,0,block_index.w});
     }
-    if(block_index.x == Chunk::ChunkSizeX-2 && block_index.y == 1){
-        getChunk(chunk_index.x + 1, chunk_index.y -1).setBlock({0,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
+    if(block_index.x == Chunk::ChunkSizeX-2 && block_index.z == 1){
+        getChunk(chunk_index.p + 1, chunk_index.q -1).setBlock({0,block_index.y,Chunk::ChunkSizeZ-1,block_index.w});
     }
-    if(block_index.x == Chunk::ChunkSizeX - 2 && block_index.y == Chunk::ChunkSizeZ - 2){
-        getChunk(chunk_index.x + 1,chunk_index.y + 1).setBlock({0,block_index.y,0,block_index.w});
+    if(block_index.x == Chunk::ChunkSizeX - 2 && block_index.z == Chunk::ChunkSizeZ - 2){
+        getChunk(chunk_index.p + 1,chunk_index.q + 1).setBlock({0,block_index.y,0,block_index.w});
     }
 }
+
+void Game::onRightClick() {
+    Chunk::Index chunk_index{};
+    Chunk::Block block_index{};
+    int face = getHitBlockFace(chunk_index,block_index);
+    if(face == -1) return;
+    Chunk::Index index{};
+    Chunk::Block block{};
+    computeBlockAccordingToFace(chunk_index,block_index,face,index,block);
+    block.w = getCurrentItemIndex();
+    getChunk(index.p,index.q).setBlock(block);
+    updateNeighborChunk(index,block);
+}
+
+int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
+    Ray ray(camera);
+    int steps = ray.radius / ray.step;
+
+    for(int i = 0;i<steps;i++){
+        auto pos = ray.origin + ray.direction * ray.step * static_cast<float>(i);
+        int chunk_index_x = pos.x / Chunk::ChunkBlockSizeX;
+        int chunk_index_z = pos.z / Chunk::ChunkBlockSizeZ;
+        int block_index_x = pos.x - chunk_index_x * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
+        int block_index_z = pos.z - chunk_index_z * Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
+        int block_index_y = pos.y;
+        if(block_index_y<0 || block_index_y >= Chunk::ChunkSizeY){
+            continue;
+        }
+        int w = getChunk(chunk_index_x,chunk_index_z).queryBlockW(block_index_x,block_index_y,block_index_z);
+        if(w!=BLOCK_STATUS_EMPTY){
+            if(i==0){
+                assert(false);
+            }
+            chunk_index = {chunk_index_x,chunk_index_z};
+            block_index = {block_index_x,block_index_y,block_index_z,w};
+            int3 cur_world_pos = {(int)pos.x,(int)pos.y,(int)pos.z};
+            pos = ray.origin + ray.direction * ray.step *static_cast<float>(i-1);
+            int3 last_world_pos = {(int)pos.x,(int)pos.y,(int)pos.z};
+            int3 offset = last_world_pos - cur_world_pos;
+            if(offset.y == -1){
+                return 0;
+            }
+            else if(offset.z == 1){
+                return 1;
+            }
+            else if(offset.x == 1){
+                return 2;
+            }
+            else if(offset.z == -1){
+                return 3;
+            }
+            else if(offset.x == -1){
+                return 4;
+            }
+            else if(offset.y == 1){
+                return 5;
+            }
+            else{
+                throw std::runtime_error("error offset");
+            }
+        }
+    }
+    return -1;
+}
+
+void Game::computeBlockAccordingToFace(const Chunk::Index &hit_index, const Chunk::Block &hit_block, int face, Chunk::Index& index,Chunk::Block& block) {
+
+    int world_x = hit_index.p * Chunk::ChunkBlockSizeX + hit_block.x - Chunk::ChunkPadding;
+    int world_y = hit_block.y;
+    int world_z = hit_index.q * Chunk::ChunkBlockSizeZ + hit_block.z - Chunk::ChunkPadding;
+    assert(world_y > 0);
+    int3 world_coord{world_x,world_y,world_z};
+    assert(face >=0 && face <6);
+    world_coord += CubeFaceOffset[face];
+
+    computeChunkBlock(world_coord.x,world_coord.y,world_coord.z,index,block);
+}
+
+int Game::getCurrentItemIndex() {
+    return 1;
+}
+
+//todo 考虑负的坐标
+void Game::computeChunkBlock(int world_x, int world_y, int world_z,Chunk::Index& index,Chunk::Block& block) {
+    assert(world_y > 0);
+    int p = world_x / Chunk::ChunkBlockSizeX;
+    int q = world_z / Chunk::ChunkBlockSizeZ;
+    int x = std::abs(world_x) % Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
+    int y = world_y;
+    int z = std::abs(world_z) % Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
+    index.p = p;
+    index.q = q;
+    block.x = x;
+    block.y = y;
+    block.z = z;
+}
+
 

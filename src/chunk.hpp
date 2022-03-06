@@ -16,10 +16,10 @@
 class Chunk{
     public:
         struct Index{
-            int x;
-            int y;
+            int p;
+            int q;
             bool operator==(const Index& index) const{
-                return x== index.x && y == index.y;
+                return p== index.p && q == index.q;
             }
         };
         struct Block{

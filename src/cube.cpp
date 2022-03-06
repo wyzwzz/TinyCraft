@@ -18,6 +18,14 @@
  * A:(-1,-1,-1) B:(1,-1,-1) C:(1,-1,1) D:(-1,-1,1)
  * E:(-1,1,-1)  F:(1,1,-1)  G:(1,1,1)  H:(-1,1,1)
  */
+int3 CubeFaceOffset[6] = {
+        {0,-1,0},
+        {0,0,1},
+        {1,0,0},
+        {0,0,-1},
+        {-1,0,0},
+        {0,1,0}
+};
 static constexpr const float3 CubeVertices[8] = {
         {-0.5f,-0.5f,-0.5f},//A
         {0.5f,-0.5f,-0.5f},//B
@@ -69,8 +77,8 @@ void MakeCube(){
 
 std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block &block_idx, int *expose) {
     std::vector<Triangle> triangles;
-    float chunk_origin_x = chunk_idx.x * Chunk::ChunkBlockSizeX;
-    float chunk_origin_z = chunk_idx.y * Chunk::ChunkBlockSizeZ;
+    float chunk_origin_x = chunk_idx.p * Chunk::ChunkBlockSizeX;
+    float chunk_origin_z = chunk_idx.q * Chunk::ChunkBlockSizeZ;
     //传进来的Block确保不会是边界块
     float block_pos_x = chunk_origin_x + static_cast<float>(block_idx.x) - Chunk::ChunkPadding+0.5f;
     float block_pos_z = chunk_origin_z + static_cast<float>(block_idx.z) - Chunk::ChunkPadding+0.5f;
@@ -127,8 +135,8 @@ std::vector<float3> MakeCubeWireframe(const Chunk::Index &chunk_index,const Chun
         4,5,5,6,6,7,7,4,
         0,4,1,5,2,6,3,7
     };
-    float chunk_origin_x = chunk_index.x * Chunk::ChunkBlockSizeX;
-    float chunk_origin_z = chunk_index.y * Chunk::ChunkBlockSizeZ;
+    float chunk_origin_x = chunk_index.p * Chunk::ChunkBlockSizeX;
+    float chunk_origin_z = chunk_index.q * Chunk::ChunkBlockSizeZ;
     //传进来的Block确保不会是边界块
     float block_pos_x = chunk_origin_x + static_cast<float>(block_index.x) - Chunk::ChunkPadding+0.5f;
     float block_pos_z = chunk_origin_z + static_cast<float>(block_index.z) - Chunk::ChunkPadding+0.5f;

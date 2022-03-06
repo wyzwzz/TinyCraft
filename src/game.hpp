@@ -44,9 +44,14 @@ class Game{
         Chunk& getChunk(int p,int q);
         void updateDirtyChunks();
         void updateNeighborChunk(const Chunk::Index& chunk_index,const Chunk::Block& block_index);
+        int getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index);
+        void computeBlockAccordingToFace(const Chunk::Index&,const Chunk::Block&,int,Chunk::Index&,Chunk::Block&);
+        int getCurrentItemIndex();
+        void computeChunkBlock(int world_x,int world_y,int world_z,Chunk::Index&,Chunk::Block&);
 
-    private:
+private:
         void onLeftClick();
+        void onRightClick();
         void testGenChunk();
         void deleteBlockWireframeBuffer();
         void generateBlockWireframeBuffer(const std::vector<float3>& pts);
