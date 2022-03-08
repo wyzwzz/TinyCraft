@@ -15,5 +15,16 @@ struct Frustum{
 };
 
 struct BoundBox3D{
-
+    float3 min_p;
+    float3 max_p;
 };
+inline bool FrustumIntersectWithBoundBox(const Frustum& frustum,const BoundBox3D& box){
+    return false;
+}
+inline void ExtractFrustumFromProjViewMatrix(const mat4& vp,Frustum& frustum){
+
+}
+
+inline BoundBox3D GetBoundBoxFromFrustum(const Frustum& frustum){
+    return {};
+}

@@ -83,7 +83,18 @@ class Chunk{
         //must call after call setBlock or isDirty return true
         void generateVisibleFaces();
 
-
+        //考虑负的情况
+        static Chunk::Index computeChunkIndex(float x,float z){
+            return {computeChunIndexP(x), computeChunIndexQ(z)};
+        }
+        static int computeChunIndexP(float x){
+            int p = x < 0.f ? -1 - (-x)/ChunkBlockSizeX : x / ChunkBlockSizeX;
+            return p;
+        }
+        static int computeChunIndexQ(float z){
+            int q = z < 0.f ? -1 - (-z)/ChunkBlockSizeZ : z / ChunkBlockSizeZ;
+            return q;
+        }
 
         uint32_t getDrawBuffer();
 

@@ -36,6 +36,8 @@ class Game{
         void loadChunk(int p,int q);//加载一个chunk 保证生成 从数据库中加载或者新生成
         void loadBlockTexture();
         void createTextureSampler();
+        bool isChunkLoaded(int p,int q);
+        void computeVisibleChunks();
 
         void renderHitBlock();
         void generateHitBlockBuffer(const Chunk::Index&,const Chunk::Block&);
@@ -66,7 +68,8 @@ private:
     private:
         //use list because of frequent operation for append and delete
         //there is no random access but access by iterate
-        std::list<Chunk> chunks;
+        std::list<Chunk> chunks;//todo replace with lru
+        std::list<Chunk*> visible_chunks;
         std::vector<Player> players;
         GLFWwindow* window;
         Camera camera;

@@ -168,6 +168,8 @@ void Game::mainLoop(){
 
         handleMouseInput();
 
+        computeVisibleChunks();
+
         //re-generate chunk draw buffer after input event
         updateDirtyChunks();
 
@@ -285,6 +287,7 @@ void Game::handleMouseInput() {
 }
 
 void Game::generateInitialWorld() {
+    createChunk(-1,-1);
     createChunk(0,0);
     createChunk(0,1);
     createChunk(1,0);
@@ -393,8 +396,8 @@ bool Game::getHitBlock(Chunk::Index &chunk_index, Chunk::Block &block_index) {
     int steps = ray.radius / ray.step;
     for(int i = 0;i<steps;i++){
         auto pos = ray.origin + ray.direction * ray.step * static_cast<float>(i);
-        int chunk_index_x = pos.x / Chunk::ChunkBlockSizeX;
-        int chunk_index_z = pos.z / Chunk::ChunkBlockSizeZ;
+        int chunk_index_x = Chunk::computeChunIndexP(pos.x);
+        int chunk_index_z = Chunk::computeChunIndexP(pos.z);
         int block_index_x = pos.x - chunk_index_x * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
         int block_index_z = pos.z - chunk_index_z * Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
         int block_index_y = pos.y;
@@ -519,8 +522,8 @@ int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
 
     for(int i = 0;i<steps;i++){
         auto pos = ray.origin + ray.direction * ray.step * static_cast<float>(i);
-        int chunk_index_x = pos.x / Chunk::ChunkBlockSizeX;
-        int chunk_index_z = pos.z / Chunk::ChunkBlockSizeZ;
+        int chunk_index_x = Chunk::computeChunIndexP(pos.x);
+        int chunk_index_z = Chunk::computeChunIndexP(pos.z);
         int block_index_x = pos.x - chunk_index_x * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
         int block_index_z = pos.z - chunk_index_z * Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
         int block_index_y = pos.y;
@@ -584,11 +587,11 @@ int Game::getCurrentItemIndex() {
 //todo 考虑负的坐标
 void Game::computeChunkBlock(int world_x, int world_y, int world_z,Chunk::Index& index,Chunk::Block& block) {
     assert(world_y > 0);
-    int p = world_x / Chunk::ChunkBlockSizeX;
-    int q = world_z / Chunk::ChunkBlockSizeZ;
-    int x = std::abs(world_x) % Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
+    int p = Chunk::computeChunIndexP(world_x);
+    int q = Chunk::computeChunIndexQ(world_z);
+    int x = world_x - p * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
     int y = world_y;
-    int z = std::abs(world_z) % Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
+    int z = world_z - q * Chunk::ChunkBlockSizeZ + Chunk::ChunkPadding;
     index.p = p;
     index.q = q;
     block.x = x;
@@ -696,6 +699,42 @@ void Game::deleteCrossChairBuffer() {
     }
     if(cross_chair_vbo){
         glDeleteBuffers(1,&cross_chair_vbo);
+    }
+}
+
+bool Game::isChunkLoaded(int p,int q) {
+    return false;
+}
+
+void Game::computeVisibleChunks() {
+    visible_chunks.clear();
+    //get view frustum of camera
+    auto vp = camera.getProjMatrix() * camera.getViewMatrix();
+    Frustum frustum;
+    ExtractFrustumFromProjViewMatrix(vp,frustum);
+    //get bound box of frustum
+    auto box = GetBoundBoxFromFrustum(frustum);
+    //计算与包围盒相交的数据块 不存储数据块的包围盒 直接根据大的包围盒的范围快速计算得到
+    int min_chunk_p = box.min_p.x / Chunk::ChunkBlockSizeX;
+    int min_chunk_q = box.min_p.z / Chunk::ChunkBlockSizeZ;
+    int max_chunk_p = box.max_p.x / Chunk::ChunkBlockSizeX;
+    int max_chunk_q = box.max_p.y / Chunk::ChunkBlockSizeZ;
+    auto make_boundbox = [](float x,float y,float z,float block_length){
+        return BoundBox3D{
+            float3{x*block_length,y*block_length,z*block_length},
+            float3{(x+1)*block_length,(y+1)*block_length,(z+1)*block_length}
+        };
+    };
+    for(int p = min_chunk_p;p<=max_chunk_p;p++){
+        for(int q = min_chunk_q;q<=max_chunk_q;q++){
+            assert(Chunk::ChunkBlockSizeX == Chunk::ChunkBlockSizeZ);
+            auto bbox = make_boundbox(p,0,q,Chunk::ChunkBlockSizeX);
+            if(!FrustumIntersectWithBoundBox(frustum,bbox)) continue;
+            if(!isChunkLoaded(p,q)){
+                loadChunk(p,q);
+            }
+            visible_chunks.push_back(&getChunk(p,q));
+        }
     }
 }
 
