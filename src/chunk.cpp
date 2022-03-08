@@ -1,6 +1,7 @@
 #include <glad/glad.h>
 #include "chunk.hpp"
 #include "cube.hpp"
+#include "item.hpp"
 Chunk::Chunk(Index index): chunk_index(index) {
 
 }

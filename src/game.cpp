@@ -2,6 +2,7 @@
 #include "ray.hpp"
 #include "cube.hpp"
 #include <cmath>
+#include "item.hpp"
 extern "C"{
 #include <noise.h>
 }
@@ -38,6 +39,8 @@ void Game::run(){
     generateInitialWorld();
     loadBlockTexture();
     createTextureSampler();
+    createItemBuffer();
+    createCrossChairBuffer();
 //    testGenChunk();
     GL_CHECK
 
@@ -106,7 +109,24 @@ void Game::initEventHandle(){
 
     };
     ScrollCallback = [&](GLFWwindow* window,double xdelta,double ydelta){
-
+        static double ypos = 0;
+        ypos += ydelta;
+        bool changed = false;
+        if (ypos < -SCROLL_THRESHOLD) {
+            current_item_index = (current_item_index + 1) % item_count;
+            ypos = 0;
+            changed = true;
+        }
+        if (ypos > SCROLL_THRESHOLD) {
+            if(--current_item_index<0){
+                current_item_index = item_count - 1;
+            }
+            ypos = 0;
+            changed = true;
+        }
+        if(changed){
+            createItemBuffer();
+        }
     };
     MouseButtonCallback = [&](GLFWwindow* window,int button,int action,int mods){
         this->exclusive = glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED;
@@ -176,6 +196,11 @@ void Game::mainLoop(){
 //            glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
             glDrawArrays(GL_TRIANGLES,0,draw_num);
         }
+        glClear(GL_DEPTH_BUFFER_BIT);
+        drawItem();
+
+        drawCrossChair();
+
         GL_CHECK
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -553,7 +578,7 @@ void Game::computeBlockAccordingToFace(const Chunk::Index &hit_index, const Chun
 }
 
 int Game::getCurrentItemIndex() {
-    return 1;
+    return items[current_item_index];
 }
 
 //todo 考虑负的坐标
@@ -569,6 +594,109 @@ void Game::computeChunkBlock(int world_x, int world_y, int world_z,Chunk::Index&
     block.x = x;
     block.y = y;
     block.z = z;
+}
+
+void Game::drawItem() {
+    mat4 model_matrix,view_matrix,proj_matrix;
+    getItemMatrix(model_matrix,view_matrix,proj_matrix);
+    shader.use();
+    shader.setMat4("model",model_matrix);
+    shader.setMat4("view",view_matrix);
+    shader.setMat4("proj",proj_matrix);
+    shader.setInt("BlockTexture",0);
+    assert(item_vao);
+    glBindVertexArray(item_vao);
+    glDrawArrays(GL_TRIANGLES,0,36);
+    glBindVertexArray(0);
+}
+
+void Game::getItemMatrix(mat4& model,mat4& view,mat4& proj) {
+    auto t1 = translate(glm::mat4(1.f),{-0.5f,-0.5f,-0.5f});
+    auto r1 = rotate(glm::mat4(1.f),radians(45.f),{0.f,1.f,0.f});
+    auto r2 = rotate(glm::mat4(1.f), radians(15.f),{1.f,0.f,0.f});
+    auto s1 = scale(glm::mat4(1.f),{0.1f,0.1f,0.1f});
+    auto t2 = translate(glm::mat4(1.f),{-1.1f,-0.6f,0.f});
+    model = t2 * s1 * r2 * r1 * t1;
+    view = lookAt(float3{0.f,0.f,3.f},{0.f,0.f,0.f},{0.f,1.f,0.f});
+    proj = ortho(-0.7f*ScreenAspect,0.7f*ScreenAspect,-0.7f,0.7f,0.1f,5.f);
+}
+
+void Game::createItemBuffer() {
+    static int expose[6] = {1,1,1,1,1,1};
+    if(item_vao || item_vbo){
+        deleteItemBuffer();
+    }
+    auto triangles = MakeCube({0,0},{1,0,1,getCurrentItemIndex()},expose);
+    glCreateVertexArrays(1,&item_vao);
+    glBindVertexArray(item_vao);
+    glCreateBuffers(1,&item_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,item_vbo);
+    glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
+    GL_CHECK
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(3*sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(6*sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+    GL_CHECK
+}
+
+void Game::deleteItemBuffer() {
+    if(item_vao){
+        GL_EXPR(glDeleteVertexArrays(1,&item_vao));
+    }
+    if(item_vbo){
+        GL_EXPR(glDeleteBuffers(1,&item_vbo))
+    }
+}
+
+void Game::createCrossChairBuffer() {
+    static float3 CrossChairVertices[4] = {
+            {-0.03f,0.f,0.f},{0.03f,0.f,0.f},
+            {0.f,-0.03f,0.f},{0.f,0.03f,0.f}
+    };
+    if(cross_chair_vao || cross_chair_vbo){
+        deleteCrossChairBuffer();
+    }
+    glCreateVertexArrays(1,&cross_chair_vao);
+    glBindVertexArray(cross_chair_vao);
+    glCreateBuffers(1,&cross_chair_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,cross_chair_vbo);
+    glBufferData(GL_ARRAY_BUFFER,4*sizeof(float3),CrossChairVertices,GL_STATIC_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*3,(void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(cross_chair_vao);
+    GL_CHECK
+}
+
+void Game::drawCrossChair() {
+    static mat4 model = mat4(1.f);
+    static mat4 view = lookAt(float3{0.f,0.f,3.f},{0.f,0.f,0.f},{0.f,1.f,0.f});
+    static mat4 proj = ortho(-0.7f*ScreenAspect,0.7f*ScreenAspect,-0.7f,0.7f,0.1f,5.f);
+
+    if(cross_chair_vao == 0) return;
+
+
+    wireframe_shader.use();
+    wireframe_shader.setMat4("model",model);
+    wireframe_shader.setMat4("view",view);
+    wireframe_shader.setMat4("proj",proj);
+    glBindVertexArray(cross_chair_vao);
+    glLineWidth(3.f);
+    glDrawArrays(GL_LINES,0,4);
+    glBindVertexArray(0);
+
+}
+
+void Game::deleteCrossChairBuffer() {
+    if(cross_chair_vao){
+        glDeleteVertexArrays(1,&cross_chair_vao);
+    }
+    if(cross_chair_vbo){
+        glDeleteBuffers(1,&cross_chair_vbo);
+    }
 }
 
 

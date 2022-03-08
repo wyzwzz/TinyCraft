@@ -49,6 +49,14 @@ class Game{
         int getCurrentItemIndex();
         void computeChunkBlock(int world_x,int world_y,int world_z,Chunk::Index&,Chunk::Block&);
 
+        void createItemBuffer();
+        void deleteItemBuffer();
+        void drawItem();
+        void getItemMatrix(mat4& model,mat4& view,mat4& proj);
+
+        void createCrossChairBuffer();
+        void deleteCrossChairBuffer();
+        void drawCrossChair();
 private:
         void onLeftClick();
         void onRightClick();
@@ -67,6 +75,11 @@ private:
         uint32_t texture{0};
         uint32_t sampler{0};
         uint32_t block_wireframe_vao{0},block_wireframe_vbo{0};
+
+        uint32_t item_vao{0},item_vbo{0};
+        int current_item_index{0};
+
+        uint32_t cross_chair_vao{0},cross_chair_vbo{0};
 
         Shader wireframe_shader;
 };
