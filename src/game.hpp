@@ -36,7 +36,7 @@ class Game{
         void loadChunk(int p,int q);//加载一个chunk 保证生成 从数据库中加载或者新生成
         void loadBlockTexture();
         void createTextureSampler();
-        bool isChunkLoaded(int p,int q);
+        bool isChunkLoaded(int p,int q) const;
         void computeVisibleChunks();
 
         void renderHitBlock();

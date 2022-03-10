@@ -425,6 +425,7 @@ Chunk &Game::getChunk(int p,int q) {
 }
 
 void Game::loadChunk(int p, int q) {
+    if(isChunkLoaded(p,q)) return;
     //if chunk has store in the db
 
     //create the new chunk
@@ -634,13 +635,16 @@ void Game::createItemBuffer() {
     glBindVertexArray(item_vao);
     glCreateBuffers(1,&item_vbo);
     glBindBuffer(GL_ARRAY_BUFFER,item_vbo);
+    std::cout<<"sizeof Triangle: "<<sizeof(Triangle)<<std::endl;
+    assert(sizeof(Triangle)==sizeof(float)*8*3);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
+    glFinish();
     GL_CHECK
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(6*sizeof(float)));
+    glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(6*sizeof(float)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
     GL_CHECK
@@ -702,7 +706,12 @@ void Game::deleteCrossChairBuffer() {
     }
 }
 
-bool Game::isChunkLoaded(int p,int q) {
+bool Game::isChunkLoaded(int p,int q) const{
+    for(auto& chunk:chunks){
+        if(chunk.getIndex() == Chunk::Index{p,q}){
+            return true;
+        }
+    }
     return false;
 }
 
@@ -713,12 +722,12 @@ void Game::computeVisibleChunks() {
     Frustum frustum;
     ExtractFrustumFromProjViewMatrix(vp,frustum);
     //get bound box of frustum
-    auto box = GetBoundBoxFromFrustum(frustum);
+    auto box = GetBoundBoxFromCamera(camera);
     //计算与包围盒相交的数据块 不存储数据块的包围盒 直接根据大的包围盒的范围快速计算得到
-    int min_chunk_p = box.min_p.x / Chunk::ChunkBlockSizeX;
-    int min_chunk_q = box.min_p.z / Chunk::ChunkBlockSizeZ;
-    int max_chunk_p = box.max_p.x / Chunk::ChunkBlockSizeX;
-    int max_chunk_q = box.max_p.y / Chunk::ChunkBlockSizeZ;
+    int min_chunk_p = Chunk::computeChunIndexP(box.min_p.x);//box.min_p.x / Chunk::ChunkBlockSizeX;
+    int min_chunk_q = Chunk::computeChunIndexQ(box.min_p.z);//box.min_p.z / Chunk::ChunkBlockSizeZ;
+    int max_chunk_p = Chunk::computeChunIndexP(box.max_p.x);//box.max_p.x / Chunk::ChunkBlockSizeX;
+    int max_chunk_q = Chunk::computeChunIndexQ(box.max_p.z);//box.max_p.z / Chunk::ChunkBlockSizeZ;
     auto make_boundbox = [](float x,float y,float z,float block_length){
         return BoundBox3D{
             float3{x*block_length,y*block_length,z*block_length},

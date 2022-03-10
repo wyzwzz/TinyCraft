@@ -1,6 +1,6 @@
 #pragma once
 #include "math.hpp"
-#include "geometry.hpp"
+#include "define.hpp"
 class Camera{
 public:
     Matrix4 getViewMatrix() const{
