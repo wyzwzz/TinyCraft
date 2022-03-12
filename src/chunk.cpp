@@ -15,12 +15,115 @@ void Chunk::setBlock(const Chunk::Block &block) {
 bool Chunk::isDirty() const {
     return dirty;
 }
-
+/*
+ *                y
+ *                |
+ *               E|________F
+ *              / |      / |
+ *             /  | O   /  |
+ *           H/___|_*__/G  |
+ *            |   |___ |___|______x
+ *            |  / A   |  /B
+ *            | /      | /
+ *            |/_______|/
+ *            /D        C
+ *           /
+ *          z
+ *
+ * A:0  B:1  C:2  D:3
+ * E:4  F:5  G:6  H:7
+ *
+ * face 0: (0,1,2,3) bottom (A B C D)
+ * face 1: (3,2,6,7) front (D C G H)
+ * face 2: (2,1,5,6) right (C B F G)
+ * face 3: (1,0,4,5) back (B A E F)
+ * face 4: (0,3,7,4) left (A D H E)
+ * face 5: (4,7,6,5) top (E H G F)
+ *
+ * bottom
+ *        0   1   2
+ *          A   B
+ *        9   10  11
+ *          D   C
+ *        18  19  20
+ * front  24  25  26
+ *          H   G
+ *        21  22  23
+ *          D   C
+ *        18  19  20
+ * right  26  17  8
+ *          G   F
+ *        23  14  5
+ *          C   B
+ *        20  11  2
+ * back   6   7   8
+ *          E   F
+ *        3   4   5
+ *          A   B
+ *        0   1   2
+ * left   6  15  24
+ *         E    H
+ *        3  12  21
+ *         A   D
+ *        0   9  18
+ * top    6   7   8
+ *          E   F
+ *        15  16  17
+ *          H   G
+ *        24  25  26
+ */
+void occlusion(bool neighbor[27],float shades[27],float ao[6][4]){
+    static constexpr int lookup3[6][4][3]={
+        {{0,1,9},{2,1,11},{20,11,19},{18,9,19}},
+        {{18, 19, 21},{20,19,23},{26,23,25},{24,21,25}},
+        {{20,11,23},{2,5,11},{8,17,5},{26,17,23}},
+        {{2,1,5},{0,1,3},{6,3,7},{8,5,7}},
+        {{0,3,9},{18,9,21},{24,15,21},{6,3,15}},
+        {{6,7,15},{24,15,25},{26,17,25},{8,7,17}}
+    };
+    static constexpr int lookup4[6][4][4]={
+        {{0,1,9,10},{1,2,10,11},{10,11,19,20},{9,10,18,19}},
+        {{18,19,21,22},{19,20,22,23},{22,23,25,26},{21,22,24,25}},
+        {{11,14,20,23},{2,5,11,14},{5,8,14,17},{14,17,23,26}},
+        {{1,2,4,5},{0,1,3,4},{3,4,6,7},{4,5,7,8}},
+        {{0,3,9,12},{9,18,12,21},{12,15,21,24},{3,6,12,15}},
+        {{6,7,15,16},{15,16,24,25},{16,17,25,26},{7,8,16,17}}
+    };
+    static constexpr float curve[4] = {0.f,0.25f,0.5f,0.75f};
+    for(int i = 0;i<6;i++){
+        for(int j = 0;j<4;j++){
+            int corner = neighbor[lookup3[i][j][0]];
+            int side1 = neighbor[lookup3[i][j][1]];
+            int side2 = neighbor[lookup3[i][j][2]];
+            int value = side1 && side2 ? 3 : corner + side1 + side2;
+            float shade_sum = 0.f;
+            for(int k = 0;k<4;k++){
+                shade_sum += shades[lookup4[i][j][k]];
+            }
+            float total = curve[value] + shade_sum / 4.f;
+            ao[i][j] = std::min(total,1.f);
+        }
+    }
+}
+#define XYZ(x,y,z) ((y) * ChunkSizeX * ChunkSizeZ + (z) * ChunkSizeX + (x))
+#define XZ(x,z) ((z) * ChunkSizeX + (x))
 void Chunk::generateVisibleFaces() {
     this->visible_face_num = 0;
     std::vector<Triangle> visible_triangles;
+    std::vector<bool> opaque(ChunkSize,false);
+    std::vector<uint8_t> highest(ChunkSizeX*ChunkSizeZ,0);
+
+    for(auto it = block_map.begin();it!=block_map.end();it++){
+        const auto& entry = it->first;
+        bool is_opaque = !isTransparent(it->second);
+        opaque[XYZ(entry.x,entry.y,entry.z)] = is_opaque;
+        if(is_opaque){
+            highest[XZ(entry.x,entry.z)] = std::max(highest[XZ(entry.x,entry.z)],(uint8_t)entry.y);
+        }
+    }
     for(auto& block_item:block_map){
-        int expose[6] = {0,0,0,0,0,0};
+        bool expose[6] = {false};
+
         auto& block_index = block_item.first;
         auto block_value = block_item.second;
         if(block_value == BLOCK_STATUS_EMPTY) continue;
@@ -32,32 +135,45 @@ void Chunk::generateVisibleFaces() {
             this->visible_face_num+=4;
             continue;
         }
-        if(!isBlockOpaque({block_index.x,block_index.y-1,block_index.z})){
-            expose[0] = 1;
-        }
-        if(!isBlockOpaque({block_index.x,block_index.y,block_index.z+1})){
-            expose[1] = 1;
-        }
-        if(!isBlockOpaque({block_index.x+1,block_index.y,block_index.z})){
-            expose[2] = 1;
-        }
-        if(!isBlockOpaque({block_index.x,block_index.y,block_index.z-1})){
-            expose[3] = 1;
-        }
-        if(!isBlockOpaque({block_index.x-1,block_index.y,block_index.z})){
-            expose[4] = 1;
-        }
-        if(!isBlockOpaque({block_index.x,block_index.y+1,block_index.z})){
-            expose[5] = 1;
-        }
+        expose[0] = !opaque[XYZ(block_index.x,block_index.y-1,block_index.z)];
+        expose[1] = !opaque[XYZ(block_index.x,block_index.y,block_index.z+1)];
+        expose[2] = !opaque[XYZ(block_index.x+1,block_index.y,block_index.z)];
+        expose[3] = !opaque[XYZ(block_index.x,block_index.y,block_index.z-1)];
+        expose[4] = !opaque[XYZ(block_index.x-1,block_index.y,block_index.z)];
+        expose[5] = !opaque[XYZ(block_index.x,block_index.y+1,block_index.z)];
+
+        int exposed_count = 0;
         for(int i =0;i<6;i++){
             if(expose[i]==1){
                 this->visible_face_num++;
+                exposed_count++;
             }
         }
-        auto gen_triangles  = MakeCube(chunk_index,Block{block_index,block_value},expose);
-//        std::cout<<"block "<<block_index.x<<" "<<block_index.y<<" "<<block_index.z<<std::endl;
-//        std::cout<<"gen triangle num "<<gen_triangles.size()<<std::endl;
+        if(exposed_count==0) continue;
+        bool neighbor[27] = {false};
+        float shades[27] = {0.f};
+        float ao[6][4] = {0.f};
+        int index = 0;
+        for(int dz = -1;dz<=1;dz++){
+            for(int dy = -1;dy<=1;dy++){
+                for(int dx = -1;dx<=1;dx++){
+                    neighbor[index] = opaque[XYZ(block_index.x+dx,block_index.y+dy,block_index.z+dz)];
+                    if(block_index.y + dy <= highest[XZ(block_index.x+dx,block_index.z+dz)]){
+                        for(int oy = 0;oy<8;oy++){
+                            if(opaque[XYZ(block_index.x+dx,block_index.y+dy+oy,block_index.z+dz)]){
+                                shades[index] = 1.0 - oy * 0.125;
+                                break;
+                            }
+                        }
+                    }
+                    index++;
+                }
+            }
+        }
+        occlusion(neighbor,shades,ao);
+
+        auto gen_triangles  = MakeCube(chunk_index,Block{block_index,block_value},expose,ao);
+
         visible_triangles.insert(visible_triangles.end(),gen_triangles.begin(),gen_triangles.end());
     }
     genVisibleFaceBuffer(visible_triangles);
@@ -69,7 +185,8 @@ void Chunk::generateVisibleFaces() {
 
 bool Chunk::isBoundary(const Map::MapEntry& block_index) {
     return block_index.x==0 || block_index.z==0
-    || block_index.x==ChunkSizeX-1 || block_index.z==ChunkSizeZ-1;
+    || block_index.x==ChunkSizeX-1 || block_index.z==ChunkSizeZ-1
+        || block_index.y == 0;
 }
 
 bool Chunk::isBase(const Chunk::Block &block) {
@@ -86,11 +203,11 @@ void Chunk::genVisibleFaceBuffer(const std::vector<Triangle>& triangles) {
     glBindBuffer(GL_ARRAY_BUFFER,draw_buffer);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
     GL_CHECK
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)0);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(3*sizeof(float)));
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(6*sizeof(float)));
+    glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)(6*sizeof(float)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
     GL_CHECK

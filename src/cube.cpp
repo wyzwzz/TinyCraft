@@ -20,6 +20,15 @@ extern "C"{
  * 
  * A:(-1,-1,-1) B:(1,-1,-1) C:(1,-1,1) D:(-1,-1,1)
  * E:(-1,1,-1)  F:(1,1,-1)  G:(1,1,1)  H:(-1,1,1)
+ * A:0  B:1  C:2  D:3
+ * E:4  F:5  G:6  H:7
+ *
+ * face 0: (0,1,2,3) bottom (A B C D)
+ * face 1: (3,2,6,7) front (D C G H)
+ * face 2: (2,1,5,6) right (C B F G)
+ * face 3: (1,0,4,5) back (B A E F)
+ * face 4: (0,3,7,4) left (A D H E)
+ * face 5: (4,7,6,5) top (E H G F)
  */
 int3 CubeFaceOffset[6] = {
         {0,-1,0},
@@ -30,14 +39,30 @@ int3 CubeFaceOffset[6] = {
         {0,1,0}
 };
 static constexpr const float3 CubeVertices[8] = {
-        {-0.5f,-0.5f,-0.5f},//A
-        {0.5f,-0.5f,-0.5f},//B
-        {0.5f,-0.5f,0.5f},//C
-        {-0.5f,-0.5f,0.5f},//D
-        {-0.5f,0.5f,-0.5f},//E
-        {0.5f,0.5f,-0.5f},//F
-        {0.5f,0.5f,0.5f},//G
-        {-0.5f,0.5f,0.5f}//H
+        {-0.5f,-0.5f,-0.5f},//A 0
+        {0.5f,-0.5f,-0.5f},//B 1
+        {0.5f,-0.5f,0.5f},//C 2
+        {-0.5f,-0.5f,0.5f},//D 3
+        {-0.5f,0.5f,-0.5f},//E 4
+        {0.5f,0.5f,-0.5f},//F 5
+        {0.5f,0.5f,0.5f},//G 6
+        {-0.5f,0.5f,0.5f}//H 7
+};
+static constexpr const int CubeIndices[6][6] = {
+    {0,1,2,0,2,3},
+    {3,2,6,3,6,7},
+    {2,1,5,2,5,6},
+    {1,0,4,1,4,5},
+    {0,3,7,0,7,4},
+    {4,7,6,4,6,5}
+};
+static constexpr const int FlippedCubeIndices[6][6] = {
+    {0,1,3,1,2,3},
+    {3,2,7,2,6,7},
+    {2,1,6,1,5,6},
+    {1,0,5,0,4,5},
+    {0,3,4,3,7,4},
+    {4,7,5,5,7,6}
 };
 /**
  *@brief 立方体的顶点位置，每个面由两个三角形组成
@@ -78,8 +103,14 @@ void MakeCube(){
 
 }
 
-std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block &block_idx, int *expose) {
+std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block &block_idx,bool expose[6],float ao[6][4]) {
     std::vector<Triangle> triangles;
+    static const int indices[6] = {
+        0,1,2,0,2,3
+    };
+    static const int flipped[6] = {
+        0,1,3,1,2,3
+    };
     float chunk_origin_x = chunk_idx.p * Chunk::ChunkBlockSizeX;
     float chunk_origin_z = chunk_idx.q * Chunk::ChunkBlockSizeZ;
     //传进来的Block确保不会是边界块
@@ -94,39 +125,35 @@ std::vector<Triangle> MakeCube(const Chunk::Index &chunk_idx, const Chunk::Block
     static float b = s - 1.f / 2048.f;
 
     for(int i =0;i<6;i++){
-        if(expose[i]==1){
+        if(!expose[i]) continue;
             float du = static_cast<float>(blocks[w][i] % 16) * s;
             float dv = static_cast<float>(blocks[w][i] / 16) * s;
+            bool flip = ao[i][0] + ao[i][2] > ao[i][3] + ao[i][1];
             triangles.emplace_back(Triangle{});
             auto& tri1 = triangles.back();
-            tri1.vertices[0].pos = CubeOffsets[i][0] + block_center_pos;
-            tri1.vertices[1].pos = CubeOffsets[i][1] + block_center_pos;
-            tri1.vertices[2].pos = CubeOffsets[i][2] + block_center_pos;
-            tri1.vertices[0].normal = CubeNormals[i];
-            tri1.vertices[1].normal = CubeNormals[i];
-            tri1.vertices[2].normal = CubeNormals[i];
-            tri1.vertices[0].uv = float2{du + (UVs[i][0].x ? b : a),
-                                         dv + (UVs[i][0].y ? b : a)};
-            tri1.vertices[1].uv = float2{du + (UVs[i][1].x ? b : a),
-                                         dv + (UVs[i][1].y ? b : a)};
-            tri1.vertices[2].uv = float2{du + (UVs[i][2].x ? b : a),
-                                         dv + (UVs[i][2].y ? b : a)};
+            for(int j = 0;j<3;j++){
+                int index = flip ? flipped[j] : indices[j];
+                tri1.vertices[j].pos = CubeOffsets[i][index] + block_center_pos;
+                tri1.vertices[j].normal = CubeNormals[i];
+                tri1.vertices[j].uv = float3{
+                    du + (UVs[i][index].x ? b : a),
+                    dv + (UVs[i][index].y? b : a),
+                    ao[i][index]
+                };
+            }
 
             triangles.emplace_back(Triangle{});
             auto& tri2 = triangles.back();
-            tri2.vertices[0].pos = CubeOffsets[i][2] + block_center_pos;
-            tri2.vertices[1].pos = CubeOffsets[i][3] + block_center_pos;
-            tri2.vertices[2].pos = CubeOffsets[i][0] + block_center_pos;
-            tri2.vertices[0].normal = CubeNormals[i];
-            tri2.vertices[1].normal = CubeNormals[i];
-            tri2.vertices[2].normal = CubeNormals[i];
-            tri2.vertices[0].uv = float2{du + (UVs[i][2].x ? b : a),
-                                         dv + (UVs[i][2].y ? b : a)};
-            tri2.vertices[1].uv = float2{du + (UVs[i][3].x ? b : a),
-                                         dv + (UVs[i][3].y ? b : a)};
-            tri2.vertices[2].uv = float2{du + (UVs[i][0].x ? b : a),
-                                         dv + (UVs[i][0].y ? b : a)};
-        }
+            for(int j = 3;j<6;j++){
+                int index = flip ? flipped[j] : indices[j];
+                tri2.vertices[j-3].pos = CubeOffsets[i][index] + block_center_pos;
+                tri2.vertices[j-3].normal = CubeNormals[i];
+                tri2.vertices[j-3].uv = float3{
+                    du + (UVs[i][index].x ? b : a),
+                    dv + (UVs[i][index].y? b : a),
+                    ao[i][index]
+                };
+            }
     }
     return triangles;
 }
@@ -202,7 +229,8 @@ std::vector<Triangle> MakePlant(const Chunk::Index &chunk_index, const Chunk::Bl
                 tri.vertices[j].pos = block_center_pos + positions[i][idx];
                 tri.vertices[j].normal = normals[i];
                 tri.vertices[j].uv = {du + (uvs[i][idx][0] ? b : a),
-                                      dv + (uvs[i][idx][1] ? b : a)};
+                                      dv + (uvs[i][idx][1] ? b : a),
+                                      0.f};
             }
         }
         {
@@ -214,7 +242,8 @@ std::vector<Triangle> MakePlant(const Chunk::Index &chunk_index, const Chunk::Bl
                 tri.vertices[j - 3].pos = block_center_pos + positions[i][idx];
                 tri.vertices[j - 3].normal = normals[i];
                 tri.vertices[j - 3].uv = {du + (uvs[i][idx][0] ? b : a),
-                                          dv + (uvs[i][idx][1] ? b : a)};
+                                          dv + (uvs[i][idx][1] ? b : a),
+                                          0.f};
             }
         }
     }

@@ -5,7 +5,7 @@
 struct Vertex{
     float3 pos;
     float3 normal;
-    float2 uv;
+    float3 uv;
 };
 struct Triangle{
     Vertex vertices[3];

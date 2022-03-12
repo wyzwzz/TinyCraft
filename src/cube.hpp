@@ -4,7 +4,7 @@
 #include "chunk.hpp"
 void MakeCube();
 
-std::vector<Triangle> MakeCube(const Chunk::Index&,const Chunk::Block&,int* expose);
+std::vector<Triangle> MakeCube(const Chunk::Index&,const Chunk::Block&,bool expose[6],float ao[6][4]);
 
 std::vector<float3> MakeCubeWireframe(const Chunk::Index &chunk_index,const Chunk::Block& block_index);
 

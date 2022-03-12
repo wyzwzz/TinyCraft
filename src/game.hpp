@@ -27,6 +27,7 @@ class Game{
 
     private:
         void handleMouseInput();
+        void handleMovement(double);
         void initGLContext();
         void initEventHandle();
         void mainLoop();

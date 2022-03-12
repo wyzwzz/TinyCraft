@@ -88,24 +88,24 @@ void Game::initEventHandle(){
         }
     };
     CharCallback = [&](GLFWwindow* window,unsigned int u){
-        switch (u) {
-            case 'a':{
-                camera.position -= camera.right * camera.move_speed;
-            }break;
-            case 'd':{
-                camera.position += camera.right * camera.move_speed;
-            }break;
-            case 'w':{
-                camera.position += camera.front * camera.move_speed;
-            }break;
-            case 's':{
-                camera.position -= camera.front * camera.move_speed;
-            }break;
-            case ' ':{
-
-            }break;
-
-        }
+//        switch (u) {
+//            case 'a':{
+//                camera.position -= camera.right * camera.move_speed;
+//            }break;
+//            case 'd':{
+//                camera.position += camera.right * camera.move_speed;
+//            }break;
+//            case 'w':{
+//                camera.position += camera.front * camera.move_speed;
+//            }break;
+//            case 's':{
+//                camera.position -= camera.front * camera.move_speed;
+//            }break;
+//            case ' ':{
+//
+//            }break;
+//
+//        }
 
     };
     ScrollCallback = [&](GLFWwindow* window,double xdelta,double ydelta){
@@ -167,6 +167,7 @@ void Game::mainLoop(){
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
         handleMouseInput();
+        handleMovement(delta_t);
 
         computeVisibleChunks();
 
@@ -650,7 +651,8 @@ void Game::getItemMatrix(mat4& model,mat4& view,mat4& proj,bool isPlant) {
 }
 
 void Game::createItemBuffer() {
-    static int expose[6] = {1,1,1,1,1,1};
+    static bool expose[6] = {1,1,1,1,1,1};
+    static float ao[6][4]={0.f};
     if(item_vao || item_vbo){
         deleteItemBuffer();
     }
@@ -660,7 +662,7 @@ void Game::createItemBuffer() {
             return MakePlant({0,0},{1,0,1,w});
         }
         else{
-            return MakeCube({0,0},{1,0,1,w},expose);
+            return MakeCube({0,0},{1,0,1,w},expose,ao);
         }
     };
     auto triangles = getTriangles(w);
@@ -669,15 +671,15 @@ void Game::createItemBuffer() {
     glCreateBuffers(1,&item_vbo);
     glBindBuffer(GL_ARRAY_BUFFER,item_vbo);
     std::cout<<"sizeof Triangle: "<<triangles.size()<<std::endl;
-    assert(sizeof(Triangle)==sizeof(float)*8*3);
+    assert(sizeof(Triangle)==sizeof(float)*9*3);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
     glFinish();
     GL_CHECK
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)0);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(3*sizeof(float)));
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(float)*8,(void*)(6*sizeof(float)));
+    glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,sizeof(float)*9,(void*)(6*sizeof(float)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
     GL_CHECK
@@ -779,5 +781,10 @@ void Game::computeVisibleChunks() {
         }
     }
 }
-
-
+void Game::handleMovement(double dt)
+{
+    if(glfwGetKey(window,'W')){
+        std::cout<<dt<<std::endl;
+        camera.position += camera.front * camera.move_speed * (float)dt;
+    }
+}
