@@ -24,7 +24,14 @@ void Chunk::generateVisibleFaces() {
         auto& block_index = block_item.first;
         auto block_value = block_item.second;
         if(block_value == BLOCK_STATUS_EMPTY) continue;
+
         if(isBoundary(block_index)) continue;
+        if(isPlant(block_value)){
+            auto tris = MakePlant(chunk_index,Block{block_index,block_value},true);
+            visible_triangles.insert(visible_triangles.end(),tris.begin(),tris.end());
+            this->visible_face_num+=4;
+            continue;
+        }
         if(!isBlockOpaque({block_index.x,block_index.y-1,block_index.z})){
             expose[0] = 1;
         }
@@ -109,13 +116,16 @@ bool Chunk::isBlockOpaque(const Map::MapEntry& block_index) {
 //    assert(isValidBlock(block_index));
     if(!isValidBlock(block_index)) return false;
     auto find_value = block_map.find(block_index);
+
+    return !isTransparent(find_value);
     //0 represent not exits
-    if(find_value == BLOCK_STATUS_EMPTY){
-        return false;
-    }
-    else{
-        return true;
-    }
+//    if(find_value == BLOCK_STATUS_EMPTY){
+//        return false;
+//    }
+//    else{
+//        return true;
+//    }
+
 }
 
 bool Chunk::isValidBlock(const MapEntry &e) {

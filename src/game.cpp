@@ -74,7 +74,7 @@ void Game::initGLContext(){
     }
     glEnable(GL_DEPTH_TEST);
     GL_CHECK
-
+    glEnable(GL_CULL_FACE);
     //todo select nvidia gpu
 }
 
@@ -161,7 +161,7 @@ void Game::mainLoop(){
         auto cur_t = glfwGetTime();
         auto delta_t = cur_t - last_t;
         last_t = cur_t;
-        std::cout<<"fps "<<int(1.0/delta_t)<<std::endl;
+//        std::cout<<"fps "<<int(1.0/delta_t)<<std::endl;
 
         glClearColor(0.f,0.f,0.f,0.f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -318,6 +318,15 @@ void Game::createChunk(int p, int q) {
             for(int y = 0;y<h;y++){
                 chunk.setBlock({dx+pad,y,dz+pad,w});
             }
+            if(w==1){
+                if(simplex2(-x*0.1,z*0.1,4,0.8,2)>0.6){
+                    chunk.setBlock({dx+pad,h,dz+pad,TALL_GRASS});
+                }
+                if(simplex2(0.05*x,-z*0.05,4,0.8,2)>0.7){
+                    int w = YELLOW_FLOWER + simplex2(x*0.1,z*0.1,4,0.8,2)*7;
+                    chunk.setBlock({dx+pad,h,dz+pad,w});
+                }
+            }
         }
     }
     chunk.generateVisibleFaces();
@@ -361,6 +370,8 @@ void Game::renderHitBlock() {
     Chunk::Index chunk_index{};
     Chunk::Block block_index{};
     if(!getHitBlock(chunk_index,block_index)) return;
+
+    if(isPlant(block_index.w)) return;
 
     generateHitBlockBuffer(chunk_index,block_index);
 
@@ -463,10 +474,18 @@ void Game::onLeftClick() {
     Chunk::Block block_index{};
     if(!getHitBlock(chunk_index,block_index)) return;
     //update this chunk's block status
+
     block_index.w = BLOCK_STATUS_EMPTY;
-    getChunk(chunk_index.p,chunk_index.q).setBlock(block_index);
+    auto& chunk = getChunk(chunk_index.p,chunk_index.q);
+    chunk.setBlock(block_index);
+
     //if this block is boundary then update the neighbor chunk's block
     updateNeighborChunk(chunk_index,block_index);
+    assert(!chunk.isBoundary({block_index.x,block_index.y+1,block_index.z}));
+    if(isPlant(chunk.queryBlockW(block_index.x,block_index.y+1,block_index.z))){
+        chunk.setBlock({block_index.x,block_index.y+1,block_index.z,BLOCK_STATUS_EMPTY});
+        updateNeighborChunk(chunk_index,{block_index.x,block_index.y+1,block_index.z,BLOCK_STATUS_EMPTY});
+    }
 }
 
 void Game::updateDirtyChunks() {
@@ -509,10 +528,12 @@ void Game::onRightClick() {
     Chunk::Block block_index{};
     int face = getHitBlockFace(chunk_index,block_index);
     if(face == -1) return;
+    if(isPlant(block_index.w)) return;//can not select plant
     Chunk::Index index{};
     Chunk::Block block{};
     computeBlockAccordingToFace(chunk_index,block_index,face,index,block);
     block.w = getCurrentItemIndex();
+    std::cout<<"new create block "<<block.x<<" "<<block.y<<" "<<block.z<<" "<<block.w<<std::endl;
     getChunk(index.p,index.q).setBlock(block);
     updateNeighborChunk(index,block);
 }
@@ -602,7 +623,7 @@ void Game::computeChunkBlock(int world_x, int world_y, int world_z,Chunk::Index&
 
 void Game::drawItem() {
     mat4 model_matrix,view_matrix,proj_matrix;
-    getItemMatrix(model_matrix,view_matrix,proj_matrix);
+    getItemMatrix(model_matrix,view_matrix,proj_matrix, isPlant(getCurrentItemIndex()));
     shader.use();
     shader.setMat4("model",model_matrix);
     shader.setMat4("view",view_matrix);
@@ -614,13 +635,16 @@ void Game::drawItem() {
     glBindVertexArray(0);
 }
 
-void Game::getItemMatrix(mat4& model,mat4& view,mat4& proj) {
+void Game::getItemMatrix(mat4& model,mat4& view,mat4& proj,bool isPlant) {
     auto t1 = translate(glm::mat4(1.f),{-0.5f,-0.5f,-0.5f});
     auto r1 = rotate(glm::mat4(1.f),radians(45.f),{0.f,1.f,0.f});
     auto r2 = rotate(glm::mat4(1.f), radians(15.f),{1.f,0.f,0.f});
     auto s1 = scale(glm::mat4(1.f),{0.1f,0.1f,0.1f});
     auto t2 = translate(glm::mat4(1.f),{-1.1f,-0.6f,0.f});
-    model = t2 * s1 * r2 * r1 * t1;
+    if(isPlant)
+        model = t2 * s1 * t1;
+    else
+        model = t2 * s1 * r2 * r1 * t1;
     view = lookAt(float3{0.f,0.f,3.f},{0.f,0.f,0.f},{0.f,1.f,0.f});
     proj = ortho(-0.7f*ScreenAspect,0.7f*ScreenAspect,-0.7f,0.7f,0.1f,5.f);
 }
@@ -630,12 +654,21 @@ void Game::createItemBuffer() {
     if(item_vao || item_vbo){
         deleteItemBuffer();
     }
-    auto triangles = MakeCube({0,0},{1,0,1,getCurrentItemIndex()},expose);
+    int w = getCurrentItemIndex();
+    auto getTriangles = [=](int w){
+        if(isPlant(w)){
+            return MakePlant({0,0},{1,0,1,w});
+        }
+        else{
+            return MakeCube({0,0},{1,0,1,w},expose);
+        }
+    };
+    auto triangles = getTriangles(w);
     glCreateVertexArrays(1,&item_vao);
     glBindVertexArray(item_vao);
     glCreateBuffers(1,&item_vbo);
     glBindBuffer(GL_ARRAY_BUFFER,item_vbo);
-    std::cout<<"sizeof Triangle: "<<sizeof(Triangle)<<std::endl;
+    std::cout<<"sizeof Triangle: "<<triangles.size()<<std::endl;
     assert(sizeof(Triangle)==sizeof(float)*8*3);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
     glFinish();

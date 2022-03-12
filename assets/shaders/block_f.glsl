@@ -8,5 +8,6 @@ uniform sampler2D BlockTexture;
 
 void main(){
     vec4 block_color = texture(BlockTexture,uv).rgba;
+    if(block_color.rgb == vec3(1.f,0.f,1.f)) discard;
     oFragColor = vec4(block_color.rgb,1.f);
 }

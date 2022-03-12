@@ -54,7 +54,7 @@ class Game{
         void createItemBuffer();
         void deleteItemBuffer();
         void drawItem();
-        void getItemMatrix(mat4& model,mat4& view,mat4& proj);
+        void getItemMatrix(mat4& model,mat4& view,mat4& proj,bool isPlant);
 
         void createCrossChairBuffer();
         void deleteCrossChairBuffer();

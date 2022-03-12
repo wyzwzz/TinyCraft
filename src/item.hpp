@@ -66,3 +66,13 @@ extern const int items[];
 extern const int item_count;
 extern const int blocks[256][6];
 extern const int plants[256];
+
+bool isPlant(int w);
+
+//是否障碍
+bool isObstacle(int w);
+
+//是否透明的
+bool isTransparent(int w);
+
+bool isDestructable(int w);

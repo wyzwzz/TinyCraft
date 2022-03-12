@@ -141,3 +141,54 @@ const int plants[256] = {
         53, // 22 - white flower
         54, // 23 - blue flower
 };
+
+bool isPlant(int w) {
+    switch (w) {
+        case TALL_GRASS:
+        case YELLOW_FLOWER:
+        case RED_FLOWER:
+        case PURPLE_FLOWER:
+        case SUN_FLOWER:
+        case WHITE_FLOWER:
+        case BLUE_FLOWER:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isObstacle(int w) {
+    if(isPlant(w)){
+        return false;
+    }
+    switch (w) {
+        case BLOCK_STATUS_EMPTY:
+        case CLOUD:
+            return false;
+        default:
+            return true;
+    }
+}
+
+bool isTransparent(int w) {
+    if(w == BLOCK_STATUS_EMPTY) return true;
+    if(isPlant(w)) return true;
+    switch (w) {
+        case BLOCK_STATUS_EMPTY:
+        case GLASS:
+        case LEAVES:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isDestructable(int w) {
+    switch (w) {
+        case BLOCK_STATUS_EMPTY:
+        case CLOUD:
+            return false;
+        default:
+            return true;
+    }
+}

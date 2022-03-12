@@ -8,5 +8,7 @@ std::vector<Triangle> MakeCube(const Chunk::Index&,const Chunk::Block&,int* expo
 
 std::vector<float3> MakeCubeWireframe(const Chunk::Index &chunk_index,const Chunk::Block& block_index);
 
+std::vector<Triangle> MakePlant(const Chunk::Index&,const Chunk::Block&,bool r = false);
+
 extern int3 CubeFaceOffset[6];
 
