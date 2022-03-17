@@ -7,6 +7,7 @@ constexpr const float ScreenAspect = static_cast<float>(ScreenWidth)/static_cast
 const std::string AssetsPath = "../assets/";
 const std::string ShaderPath = "../assets/shaders/";
 
+
 #define VSYNC 1
 
 #define SCROLL_THRESHOLD 0.1

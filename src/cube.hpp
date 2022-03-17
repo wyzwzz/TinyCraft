@@ -12,3 +12,7 @@ std::vector<Triangle> MakePlant(const Chunk::Index&,const Chunk::Block&,bool r =
 
 extern int3 CubeFaceOffset[6];
 
+const float3* GetCubeVertices();
+
+const int* GetCubeIndices();
+

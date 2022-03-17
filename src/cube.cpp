@@ -48,22 +48,15 @@ static constexpr const float3 CubeVertices[8] = {
         {0.5f,0.5f,0.5f},//G 6
         {-0.5f,0.5f,0.5f}//H 7
 };
-static constexpr const int CubeIndices[6][6] = {
-    {0,1,2,0,2,3},
-    {3,2,6,3,6,7},
-    {2,1,5,2,5,6},
-    {1,0,4,1,4,5},
-    {0,3,7,0,7,4},
-    {4,7,6,4,6,5}
+static constexpr const int CubeIndices[36] = {
+    0,1,2,0,2,3,
+    3,2,6,3,6,7,
+    2,1,5,2,5,6,
+    1,0,4,1,4,5,
+    0,3,7,0,7,4,
+    4,7,6,4,6,5
 };
-static constexpr const int FlippedCubeIndices[6][6] = {
-    {0,1,3,1,2,3},
-    {3,2,7,2,6,7},
-    {2,1,6,1,5,6},
-    {1,0,5,0,4,5},
-    {0,3,4,3,7,4},
-    {4,7,5,5,7,6}
-};
+
 /**
  *@brief 立方体的顶点位置，每个面由两个三角形组成
  */
@@ -261,4 +254,12 @@ std::vector<Triangle> MakePlant(const Chunk::Index &chunk_index, const Chunk::Bl
         }
     }
     return triangles;
+}
+
+const float3 *GetCubeVertices() {
+    return CubeVertices;
+}
+
+const int *GetCubeIndices() {
+    return CubeIndices;
 }

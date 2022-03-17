@@ -60,6 +60,11 @@ class Game{
         void createCrossChairBuffer();
         void deleteCrossChairBuffer();
         void drawCrossChair();
+
+        void createSkyBox();
+        void drawSkyBox();
+        float getDayTime();
+        float getDayLight();
 private:
         void onLeftClick();
         void onRightClick();
@@ -86,4 +91,10 @@ private:
         uint32_t cross_chair_vao{0},cross_chair_vbo{0};
 
         Shader wireframe_shader;
+
+        uint32_t skybox_tex{0};
+        uint32_t skybox_vao{0},skybox_vbo{0},skybox_ebo{0};
+        Shader skybox_shader;
+
+        double day_time;
 };

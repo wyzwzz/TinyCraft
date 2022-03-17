@@ -18,11 +18,11 @@ public:
     float yaw{-90.f};
     float pitch{0.f};
     float z_near{0.01f};
-    float z_far{100.f};
+    float z_far{300.f};
     float zoom{65.f};//15.f
     float3 world_up{0.f,1.f,0.f};
     float move_sense{0.05f};
-    float move_speed{1.f};
+    float move_speed{3.f};
     static constexpr float aspect = static_cast<float>(ScreenWidth)/static_cast<float>(ScreenHeight);
 
 };

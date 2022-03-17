@@ -32,6 +32,7 @@ Game::Game(int argc,char** argv){
     GL_CHECK
     shader = Shader((ShaderPath+"block_v.glsl").c_str(),(ShaderPath+"block_f.glsl").c_str());
     wireframe_shader = Shader((ShaderPath+"wireframe_v.glsl").c_str(),(ShaderPath+"wireframe_f.glsl").c_str());
+    skybox_shader = Shader((ShaderPath+"background_v.glsl").c_str(),(ShaderPath+"background_f.glsl").c_str());
     GL_CHECK
 }
 
@@ -41,6 +42,7 @@ void Game::run(){
     createTextureSampler();
     createItemBuffer();
     createCrossChairBuffer();
+    createSkyBox();
 //    testGenChunk();
     GL_CHECK
 
@@ -75,6 +77,7 @@ void Game::initGLContext(){
     glEnable(GL_DEPTH_TEST);
     GL_CHECK
     glEnable(GL_CULL_FACE);
+    glDepthFunc(GL_LEQUAL);//defualt is GL_LESS, this is for skybox trick
     //todo select nvidia gpu
 }
 
@@ -88,24 +91,6 @@ void Game::initEventHandle(){
         }
     };
     CharCallback = [&](GLFWwindow* window,unsigned int u){
-//        switch (u) {
-//            case 'a':{
-//                camera.position -= camera.right * camera.move_speed;
-//            }break;
-//            case 'd':{
-//                camera.position += camera.right * camera.move_speed;
-//            }break;
-//            case 'w':{
-//                camera.position += camera.front * camera.move_speed;
-//            }break;
-//            case 's':{
-//                camera.position -= camera.front * camera.move_speed;
-//            }break;
-//            case ' ':{
-//
-//            }break;
-//
-//        }
 
     };
     ScrollCallback = [&](GLFWwindow* window,double xdelta,double ydelta){
@@ -161,6 +146,7 @@ void Game::mainLoop(){
         auto cur_t = glfwGetTime();
         auto delta_t = cur_t - last_t;
         last_t = cur_t;
+        day_time = cur_t;
 //        std::cout<<"fps "<<int(1.0/delta_t)<<std::endl;
 
         glClearColor(0.f,0.f,0.f,0.f);
@@ -188,6 +174,13 @@ void Game::mainLoop(){
         shader.setMat4("view",view_matrix);
         shader.setMat4("proj",proj_matrix);
         shader.setInt("BlockTexture",0);
+        shader.setInt("equirectangularMap",1);
+        shader.setVec3("view_pos",camera.position);
+        shader.setFloat("fog_distance",camera.z_far*0.9);
+        shader.setFloat("day_light",getDayLight());
+        shader.setFloat("day_time",getDayTime());
+        glBindTextureUnit(0,texture);
+        glBindTextureUnit(1,skybox_tex);
         auto visible_chunks = getVisibleChunks();
         while(!visible_chunks.empty()){
             auto chunk = visible_chunks.front();
@@ -199,10 +192,18 @@ void Game::mainLoop(){
 //            glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
             glDrawArrays(GL_TRIANGLES,0,draw_num);
         }
+
+        drawSkyBox();
+
         glClear(GL_DEPTH_BUFFER_BIT);
+
+
+
         drawItem();
 
         drawCrossChair();
+
+
 
         GL_CHECK
         glfwSwapBuffers(window);
@@ -327,6 +328,31 @@ void Game::createChunk(int p, int q) {
                     int w = YELLOW_FLOWER + simplex2(x*0.1,z*0.1,4,0.8,2)*7;
                     chunk.setBlock({dx+pad,h,dz+pad,w});
                 }
+                bool ok = true;
+                if(dx - 4 < 0 || dx + 4 >= Chunk::ChunkBlockSizeX
+                || dz - 4 < 0 || dz + 4 >= Chunk::ChunkBlockSizeZ){
+                    ok = false;
+                }
+                if(ok && simplex2(x,z,6,0.5,2) > 0.87){
+                    for(int y = h+3;y<h+8;y++){
+                        for(int ox = -3;ox<=3;ox++){
+                            for(int oz = -3;oz <=3;oz++){
+                                int d = (ox*ox)+(oz*oz)+(y-(h+4))*(y-(h+4));
+                                if(d<11){
+                                    chunk.setBlock({dx+pad+ox,y,dz+pad+oz,LEAVES});
+                                }
+                            }
+                        }
+                    }
+                    for(int y= h;y<h+7;y++){
+                        chunk.setBlock({dx+pad,y,dz+pad,WOOD});
+                    }
+                }
+                for(int y = 64;y<72;y++){
+                    if(simplex3(x*0.01,y*0.1,z*0.01,8,0.5,2)>0.72){
+                        chunk.setBlock({dx+pad,y,dz+pad,CLOUD});
+                    }
+                }
             }
         }
     }
@@ -349,6 +375,7 @@ void Game::loadBlockTexture() {
     glBindTextureUnit(0,texture);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
     stbi_image_free(data);
+    stbi_set_flip_vertically_on_load(false);
     GL_CHECK
 }
 
@@ -629,7 +656,7 @@ void Game::drawItem() {
     shader.setMat4("model",model_matrix);
     shader.setMat4("view",view_matrix);
     shader.setMat4("proj",proj_matrix);
-    shader.setInt("BlockTexture",0);
+    shader.setFloat("day_light",1.f);
     assert(item_vao);
     glBindVertexArray(item_vao);
     glDrawArrays(GL_TRIANGLES,0,36);
@@ -788,3 +815,74 @@ void Game::handleMovement(double dt)
         camera.position += camera.front * camera.move_speed * (float)dt;
     }
 }
+
+void Game::createSkyBox() {
+    std::string path = AssetsPath + "textures/sky.png";
+    int width = 0,height = 0,channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    auto data = stbi_load(path.c_str(),&width,&height,&channels,0);
+    assert(channels == 4);
+    assert(data);
+    glCreateTextures(GL_TEXTURE_2D,1,&skybox_tex);
+    glBindTexture(GL_TEXTURE_2D,skybox_tex);
+    glBindTextureUnit(1,skybox_tex);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE ,data);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    stbi_set_flip_vertically_on_load(false);
+    stbi_image_free(data);
+
+    glCreateVertexArrays(1,&skybox_vao);
+    glBindVertexArray(skybox_vao);
+    glCreateBuffers(1,&skybox_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,skybox_vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(float3)*8,GetCubeVertices(),GL_STATIC_DRAW);
+    glCreateBuffers(1,&skybox_ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,skybox_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(int)*36,GetCubeIndices(),GL_STATIC_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*3,(void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
+    GL_CHECK
+
+
+
+}
+
+void Game::drawSkyBox() {
+    skybox_shader.use();
+    skybox_shader.setMat4("view",camera.getViewMatrix());
+    skybox_shader.setMat4("proj",camera.getProjMatrix());
+    skybox_shader.setInt("equirectangularMap",1);
+    skybox_shader.setFloat("exposure",1.f);
+
+    skybox_shader.setFloat("day_time",getDayTime());
+    glFrontFace(GL_CW);
+    glBindVertexArray(skybox_vao);
+    glBindTextureUnit(1,skybox_tex);
+    glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,nullptr);
+    glFrontFace(GL_CCW);
+}
+
+float Game::getDayLight() {
+    float day_t = getDayTime();
+    if (day_t < 0.5) {
+        float t = (day_t - 0.25) * 100;
+        return 1 / (1 + powf(2, -t));
+    }
+    else {
+        float t = (day_t - 0.85) * 100;
+        return 1 - 1 / (1 + powf(2, -t));
+    }
+}
+
+float Game::getDayTime() {
+    float t = day_time * 0.03;
+    t = t - (int)t;
+    return t;
+}
+
+
