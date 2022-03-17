@@ -5,7 +5,7 @@ int main(int argc,char** argv){
     try{
         Game g(argc,argv);
         g.run();
-        g.shundown();
+        g.shutdown();
     }
     catch(const std::exception& err){
         std::cout<<err.what()<<std::endl;

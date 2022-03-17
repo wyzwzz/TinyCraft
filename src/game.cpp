@@ -50,8 +50,14 @@ void Game::run(){
     GL_CHECK
 }
 
-void Game::shundown(){
-
+void Game::shutdown(){
+    {
+        std::lock_guard<std::mutex> lk(chunks_mtx);
+        for(auto& pa:chunk_create_tasks){
+            if(pa.second.joinable())
+                pa.second.join();
+        }
+    }
 }
 
 void Game::initGLContext(){
@@ -64,7 +70,7 @@ void Game::initGLContext(){
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_DOUBLEBUFFER, true);
 
-    this->window = glfwCreateWindow(ScreenWidth, ScreenHeight, "GLContext", nullptr, nullptr);
+    this->window = glfwCreateWindow(ScreenWidth, ScreenHeight, "TinyCraft", nullptr, nullptr);
     if (this->window == nullptr)
     {
         throw std::runtime_error("Failed to create GLFW window");
@@ -242,8 +248,8 @@ void Game::testGenChunk() {
 
 std::queue<Chunk *> Game::getVisibleChunks() {
     std::queue<Chunk*> q;
-    for(auto& chunk:chunks){
-        q.push(&chunk);
+    for(auto chunk:visible_chunks){
+        q.push(chunk);
     }
     return q;
 }
@@ -289,11 +295,22 @@ void Game::handleMouseInput() {
 }
 
 void Game::generateInitialWorld() {
-    createChunk(-1,-1);
-    createChunk(0,0);
-    createChunk(0,1);
-    createChunk(1,0);
-    createChunk(1,1);
+    auto pos = camera.position;
+    auto r = camera.z_far;
+    BoundBox3D box = {
+            pos-float3(r),
+            pos+float3(r)
+    };
+    //计算与包围盒相交的数据块 不存储数据块的包围盒 直接根据大的包围盒的范围快速计算得到
+    int min_chunk_p = Chunk::computeChunIndexP(box.min_p.x);//box.min_p.x / Chunk::ChunkBlockSizeX;
+    int min_chunk_q = Chunk::computeChunIndexQ(box.min_p.z);//box.min_p.z / Chunk::ChunkBlockSizeZ;
+    int max_chunk_p = Chunk::computeChunIndexP(box.max_p.x);//box.max_p.x / Chunk::ChunkBlockSizeX;
+    int max_chunk_q = Chunk::computeChunIndexQ(box.max_p.z);//box.max_p.z / Chunk::ChunkBlockSizeZ;
+    for(int p = min_chunk_p;p<=max_chunk_p;p++){
+        for(int q = min_chunk_q;q<=max_chunk_q;q++){
+            createChunkAsync(p,q);
+        }
+    }
 }
 /**
  * chunk里的每一个block都有全局唯一的坐标 所以padding的部分也可以得到 保证是正确的
@@ -356,7 +373,8 @@ void Game::createChunk(int p, int q) {
             }
         }
     }
-    chunk.generateVisibleFaces();
+//    chunk.generateVisibleFaces();
+    std::lock_guard<std::mutex> lk(chunks_mtx);
     this->chunks.push_back(chunk);
 }
 
@@ -468,7 +486,7 @@ void Game::loadChunk(int p, int q) {
     //if chunk has store in the db
 
     //create the new chunk
-    createChunk(p,q);
+    createChunkAsync(p,q);
 }
 
 void Game::generateBlockWireframeBuffer(const std::vector<float3> &pts) {
@@ -796,6 +814,7 @@ void Game::computeVisibleChunks() {
             float3{(x+1)*block_length,(y+1)*block_length,(z+1)*block_length}
         };
     };
+    std::vector<Chunk::Index> vis_chunks;
     for(int p = min_chunk_p;p<=max_chunk_p;p++){
         for(int q = min_chunk_q;q<=max_chunk_q;q++){
             assert(Chunk::ChunkBlockSizeX == Chunk::ChunkBlockSizeZ);
@@ -804,9 +823,11 @@ void Game::computeVisibleChunks() {
             if(!isChunkLoaded(p,q)){
                 loadChunk(p,q);
             }
-            visible_chunks.push_back(&getChunk(p,q));
+            vis_chunks.push_back({p,q});
         }
     }
+    for(auto& idx:vis_chunks)
+        visible_chunks.push_back(&getChunk(idx.p,idx.q));
 }
 void Game::handleMovement(double dt)
 {
@@ -883,6 +904,21 @@ float Game::getDayTime() {
     float t = day_time * 0.03;
     t = t - (int)t;
     return t;
+}
+
+void Game::createChunkAsync(int p, int q) {
+    std::lock_guard<std::mutex> lk(mtx);
+    for(auto it=chunk_create_tasks.begin();it!=chunk_create_tasks.end();it++){
+        if(it->first.p == p && it->first.q == q){
+            it->second.join();
+            chunk_create_tasks.erase(it);
+            return;
+        }
+    }
+    Chunk::Index index{p,q};
+    chunk_create_tasks.emplace_back(index,std::thread([this,p,q](){
+        createChunk(p,q);
+    }));
 }
 
 

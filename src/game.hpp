@@ -9,6 +9,8 @@
 #include "shader_program.hpp"
 #include <GLFW/glfw3.h>
 #include <queue>
+#include <thread>
+#include <mutex>
 class Game{
     public:
         static constexpr int MaxChunkSize = 8192;
@@ -18,7 +20,7 @@ class Game{
 
         void run();
 
-        void shundown();
+        void shutdown();
 
         inline static std::function<void(GLFWwindow*,int,int,int,int)> KeyCallback;
         inline static std::function<void(GLFWwindow*,unsigned int)> CharCallback;
@@ -34,6 +36,7 @@ class Game{
         std::queue<Chunk*> getVisibleChunks();
         void generateInitialWorld();
         void createChunk(int p,int q);//生成一个新的随机的chunk
+        void createChunkAsync(int p,int q);
         void loadChunk(int p,int q);//加载一个chunk 保证生成 从数据库中加载或者新生成
         void loadBlockTexture();
         void createTextureSampler();
@@ -75,6 +78,9 @@ private:
         //use list because of frequent operation for append and delete
         //there is no random access but access by iterate
         std::list<Chunk> chunks;//todo replace with lru
+        std::mutex chunks_mtx;
+        std::list<std::pair<Chunk::Index,std::thread>> chunk_create_tasks;
+        std::mutex mtx;
         std::list<Chunk*> visible_chunks;
         std::vector<Player> players;
         GLFWwindow* window;
