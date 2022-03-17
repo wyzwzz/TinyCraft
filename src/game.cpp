@@ -808,17 +808,17 @@ void Game::computeVisibleChunks() {
     int min_chunk_q = Chunk::computeChunIndexQ(box.min_p.z);//box.min_p.z / Chunk::ChunkBlockSizeZ;
     int max_chunk_p = Chunk::computeChunIndexP(box.max_p.x);//box.max_p.x / Chunk::ChunkBlockSizeX;
     int max_chunk_q = Chunk::computeChunIndexQ(box.max_p.z);//box.max_p.z / Chunk::ChunkBlockSizeZ;
-    auto make_boundbox = [](float x,float y,float z,float block_length){
+    auto make_boundbox = [](float x,float y,float z,float len_x,float len_y,float len_z){
         return BoundBox3D{
-            float3{x*block_length,y*block_length,z*block_length},
-            float3{(x+1)*block_length,(y+1)*block_length,(z+1)*block_length}
+            float3{x*len_x,y*len_y,z*len_z},
+            float3{(x+1)*len_x,(y+1)*len_y,(z+1)*len_z}
         };
     };
     std::vector<Chunk::Index> vis_chunks;
     for(int p = min_chunk_p;p<=max_chunk_p;p++){
         for(int q = min_chunk_q;q<=max_chunk_q;q++){
             assert(Chunk::ChunkBlockSizeX == Chunk::ChunkBlockSizeZ);
-            auto bbox = make_boundbox(p,0,q,Chunk::ChunkBlockSizeX);
+            auto bbox = make_boundbox(p,0,q,Chunk::ChunkBlockSizeX,Chunk::ChunkSizeY,Chunk::ChunkBlockSizeZ);
             if(!FrustumIntersectWithBoundBox(frustum,bbox)) continue;
             if(!isChunkLoaded(p,q)){
                 loadChunk(p,q);
@@ -826,6 +826,7 @@ void Game::computeVisibleChunks() {
             vis_chunks.push_back({p,q});
         }
     }
+    std::cout<<"visiable chunk count "<<vis_chunks.size()<<std::endl;
     for(auto& idx:vis_chunks)
         visible_chunks.push_back(&getChunk(idx.p,idx.q));
 }
