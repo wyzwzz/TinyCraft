@@ -25,5 +25,5 @@ void main(){
     oAO = 0.3 + (1.0 -TexCoord.z) * 0.7;
     float view_dist = distance(view_pos,oVertexPos);
     oFogFactor = pow(clamp(view_dist / fog_distance,0.f,1.f),4.f);
-    oDiffuse = max(0.f,dot(oVertexNormal,light_direction));
+    oDiffuse = max(0.f,dot(normalize(oVertexNormal),normalize(light_direction)));
 }

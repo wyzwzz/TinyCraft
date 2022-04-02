@@ -83,6 +83,8 @@ class Chunk{
         //must call after call setBlock or isDirty return true
         void generateVisibleFaces();
 
+        int getHighest(int x,int z);
+
         //考虑负的情况
         static Chunk::Index computeChunkIndex(float x,float z){
             return {computeChunIndexP(x), computeChunIndexQ(z)};

@@ -256,3 +256,14 @@ int Chunk::queryBlockW(int x, int y, int z) {
 const Chunk::Index& Chunk::getIndex() const{
     return chunk_index;
 }
+
+int Chunk::getHighest(int x,int z) {
+    int max_y = 0;
+    for(int y = 0;y<ChunkSizeY;y++){
+        int w = block_map.find({x,y,z});
+        if(isObstacle(w)){
+            max_y = std::max(max_y,y);
+        }
+    }
+    return max_y+1;
+}

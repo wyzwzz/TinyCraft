@@ -42,6 +42,7 @@ class Game{
         void createTextureSampler();
         bool isChunkLoaded(int p,int q) const;
         void computeVisibleChunks();
+        void clearChunkTask();
 
         void renderHitBlock();
         void generateHitBlockBuffer(const Chunk::Index&,const Chunk::Block&);
@@ -68,6 +69,8 @@ class Game{
         void drawSkyBox();
         float getDayTime();
         float getDayLight();
+
+        bool collide(int h,float3& pos);
 private:
         void onLeftClick();
         void onRightClick();
@@ -103,4 +106,6 @@ private:
         Shader skybox_shader;
 
         double day_time;
+
+        bool flying{false};
 };

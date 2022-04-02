@@ -95,6 +95,9 @@ void Game::initEventHandle(){
                 exclusive = false;
             }
         }
+        else if(key == GLFW_KEY_TAB){
+            flying = !flying;
+        }
     };
     CharCallback = [&](GLFWwindow* window,unsigned int u){
 
@@ -797,6 +800,7 @@ bool Game::isChunkLoaded(int p,int q) const{
 
 void Game::computeVisibleChunks() {
     visible_chunks.clear();
+    clearChunkTask();
     //get view frustum of camera
     auto vp = camera.getProjMatrix() * camera.getViewMatrix();
     Frustum frustum;
@@ -827,15 +831,65 @@ void Game::computeVisibleChunks() {
         }
     }
     std::cout<<"visiable chunk count "<<vis_chunks.size()<<std::endl;
+    std::lock_guard<std::mutex> lk(chunks_mtx);
     for(auto& idx:vis_chunks)
-        visible_chunks.push_back(&getChunk(idx.p,idx.q));
+        if(isChunkLoaded(idx.p,idx.q))
+            visible_chunks.push_back(&getChunk(idx.p,idx.q));
 }
 void Game::handleMovement(double dt)
 {
+    static float dy = 0.f;
+    auto op = camera.position;
+    auto np = camera.position;
     if(glfwGetKey(window,'W')){
         std::cout<<dt<<std::endl;
-        camera.position += camera.front * camera.move_speed * (float)dt;
+        np += camera.front  ;
     }
+    if(glfwGetKey(window,'S')){
+        np -= camera.front  ;
+    }
+    if(glfwGetKey(window,'A')) {
+        np -= camera.right;
+    }
+    if(glfwGetKey(window,'D')){
+        np += camera.right  ;
+    }
+    auto d = np - op;
+
+
+    if(glfwGetKey(window,' ')){
+        if(flying){
+
+        }
+        else if(dy == 0.f){
+            dy = 8.f;
+        }
+    }
+    float speed = flying ? camera.move_speed * 3 : camera.move_speed;
+    int steps = 8;
+    float ut = dt / steps;
+
+    for(int i = 0;i<steps;i++){
+        if(flying){
+
+        }
+        else{
+
+        }
+        op +=  d * ut * speed;
+        bool col = collide(2,op);
+    }
+    camera.position = op;
+    if(camera.position.y < 0){
+        Chunk::Index chunk_index;
+        Chunk::Block block_index;
+        computeChunkBlock(camera.position.x,camera.position.y,camera.position.z,
+                          chunk_index,block_index);
+        int y = getChunk(chunk_index.p,chunk_index.q).getHighest(block_index.x,block_index.z);
+        camera.position.y = y+0.5f;
+    }
+
+    camera.target = camera.position + camera.front;
 }
 
 void Game::createSkyBox() {
@@ -911,8 +965,6 @@ void Game::createChunkAsync(int p, int q) {
     std::lock_guard<std::mutex> lk(mtx);
     for(auto it=chunk_create_tasks.begin();it!=chunk_create_tasks.end();it++){
         if(it->first.p == p && it->first.q == q){
-            it->second.join();
-            chunk_create_tasks.erase(it);
             return;
         }
     }
@@ -920,6 +972,50 @@ void Game::createChunkAsync(int p, int q) {
     chunk_create_tasks.emplace_back(index,std::thread([this,p,q](){
         createChunk(p,q);
     }));
+}
+
+void Game::clearChunkTask() {
+    std::lock_guard<std::mutex> lk(mtx);
+    for(auto it = chunk_create_tasks.begin();it!=chunk_create_tasks.end();it++){
+        if(!it->second.joinable()){
+            chunk_create_tasks.erase(it);
+        }
+    }
+}
+
+bool Game::collide(int h,float3& pos) {
+    Chunk::Index chunk_index;
+    Chunk::Block block_index;
+    computeChunkBlock(pos.x,pos.y,pos.z,
+                      chunk_index,block_index);
+    if(isObstacle(block_index.w)){
+        throw std::runtime_error("error: inside block");
+    }
+    auto& chunk = getChunk(chunk_index.p,chunk_index.q);
+
+    int nx = round(pos.x);
+    int ny = round(pos.y);
+    int nz = round(pos.z);
+    float px = pos.x - nx;
+    float py = pos.y - ny;
+    float pz = pos.z - nz;
+    float pad = 0.25f;
+    bool res = false;
+    for(int dy = 0;dy < h;dy ++){
+        if(px < pad && isObstacle(chunk.queryBlockW(nx-1,ny-dy,nz))){
+            pos.x = nx + pad;
+        }
+        if(px > -pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz))){
+            pos.x = nx - pad;
+        }
+        if(pz < pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz-1))){
+            pos.z = nz + pad;
+        }
+        if(pz > -pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz))){
+            pos.z = nz - pad;
+        }
+    }
+    return res;
 }
 
 
