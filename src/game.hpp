@@ -37,7 +37,7 @@ class Game{
         void generateInitialWorld();
         void createChunk(int p,int q);//生成一个新的随机的chunk
         void createChunkAsync(int p,int q);
-        void loadChunk(int p,int q);//加载一个chunk 保证生成 从数据库中加载或者新生成
+        void loadChunk(int p,int q,bool sync = false);//加载一个chunk 保证生成 从数据库中加载或者新生成
         void loadBlockTexture();
         void createTextureSampler();
         bool isChunkLoaded(int p,int q) const;
@@ -54,7 +54,7 @@ class Game{
         int getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index);
         void computeBlockAccordingToFace(const Chunk::Index&,const Chunk::Block&,int,Chunk::Index&,Chunk::Block&);
         int getCurrentItemIndex();
-        void computeChunkBlock(int world_x,int world_y,int world_z,Chunk::Index&,Chunk::Block&);
+        void computeChunkBlock(float world_x,float world_y,float world_z,Chunk::Index&,Chunk::Block&);
 
         void createItemBuffer();
         void deleteItemBuffer();

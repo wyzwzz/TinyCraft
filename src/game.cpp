@@ -89,13 +89,13 @@ void Game::initGLContext(){
 
 void Game::initEventHandle(){
     KeyCallback = [&](GLFWwindow* window,int key,int scancode,int action,int mods){
-        if(key == GLFW_KEY_ESCAPE){
+        if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS){
             if(exclusive){
                 glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_NORMAL);
                 exclusive = false;
             }
         }
-        else if(key == GLFW_KEY_TAB){
+        else if(key == GLFW_KEY_TAB && action == GLFW_PRESS){
             flying = !flying;
         }
     };
@@ -480,16 +480,20 @@ Chunk &Game::getChunk(int p,int q) {
             return chunk;
         }
     }
-    loadChunk(p,q);
+    loadChunk(p,q,true);
     return getChunk(p,q);
 }
 
-void Game::loadChunk(int p, int q) {
+void Game::loadChunk(int p, int q,bool sync) {
     if(isChunkLoaded(p,q)) return;
     //if chunk has store in the db
 
     //create the new chunk
-    createChunkAsync(p,q);
+    if(sync){
+        createChunk(p,q);
+    }
+    else
+        createChunkAsync(p,q);
 }
 
 void Game::generateBlockWireframeBuffer(const std::vector<float3> &pts) {
@@ -578,6 +582,7 @@ void Game::onRightClick() {
     int face = getHitBlockFace(chunk_index,block_index);
     if(face == -1) return;
     if(isPlant(block_index.w)) return;//can not select plant
+
     Chunk::Index index{};
     Chunk::Block block{};
     computeBlockAccordingToFace(chunk_index,block_index,face,index,block);
@@ -585,6 +590,14 @@ void Game::onRightClick() {
     std::cout<<"new create block "<<block.x<<" "<<block.y<<" "<<block.z<<" "<<block.w<<std::endl;
     getChunk(index.p,index.q).setBlock(block);
     updateNeighborChunk(index,block);
+    auto pos = camera.position;
+    pos.y = pos.y - 0.001f;
+    if(collide(2,pos)){
+        block.w = BLOCK_STATUS_EMPTY;
+        getChunk(index.p,index.q).setBlock(block);
+        updateNeighborChunk(index,block);
+    }
+
 }
 
 int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
@@ -656,8 +669,8 @@ int Game::getCurrentItemIndex() {
 }
 
 //todo 考虑负的坐标
-void Game::computeChunkBlock(int world_x, int world_y, int world_z,Chunk::Index& index,Chunk::Block& block) {
-    assert(world_y > 0);
+void Game::computeChunkBlock(float world_x, float world_y, float world_z,Chunk::Index& index,Chunk::Block& block) {
+//    assert(world_y > 0);
     int p = Chunk::computeChunIndexP(world_x);
     int q = Chunk::computeChunIndexQ(world_z);
     int x = world_x - p * Chunk::ChunkBlockSizeX + Chunk::ChunkPadding;
@@ -838,6 +851,7 @@ void Game::computeVisibleChunks() {
 }
 void Game::handleMovement(double dt)
 {
+    dt = 1.0 / 60.0;
     static float dy = 0.f;
     auto op = camera.position;
     auto np = camera.position;
@@ -855,29 +869,40 @@ void Game::handleMovement(double dt)
         np += camera.right  ;
     }
     auto d = np - op;
-
+    if(!flying)
+        d.y = 0.f;
 
     if(glfwGetKey(window,' ')){
         if(flying){
+//            dy = 8.f;
+        }
+        else{
+            if(dy == 0.f){
+                dy = 6.f;
+            }
+        }
 
-        }
-        else if(dy == 0.f){
-            dy = 8.f;
-        }
     }
     float speed = flying ? camera.move_speed * 3 : camera.move_speed;
     int steps = 8;
     float ut = dt / steps;
 
+
     for(int i = 0;i<steps;i++){
         if(flying){
-
+            dy = 0;
         }
         else{
-
+            dy -= ut * 25;
+            dy = (std::max)(dy, -250.f);
         }
         op +=  d * ut * speed;
+        op.y += dy * ut * speed;
         bool col = collide(2,op);
+        std::cout<<"op "<<op.x<<" "<<op.y<<" "<<op.z<<std::endl;
+        if(col){
+            dy = 0;
+        }
     }
     camera.position = op;
     if(camera.position.y < 0){
@@ -886,7 +911,7 @@ void Game::handleMovement(double dt)
         computeChunkBlock(camera.position.x,camera.position.y,camera.position.z,
                           chunk_index,block_index);
         int y = getChunk(chunk_index.p,chunk_index.q).getHighest(block_index.x,block_index.z);
-        camera.position.y = y+0.5f;
+        camera.position.y = y+1.5f;
     }
 
     camera.target = camera.position + camera.front;
@@ -991,30 +1016,45 @@ bool Game::collide(int h,float3& pos) {
     if(isObstacle(block_index.w)){
         throw std::runtime_error("error: inside block");
     }
+
     auto& chunk = getChunk(chunk_index.p,chunk_index.q);
 
-    int nx = round(pos.x);
-    int ny = round(pos.y);
-    int nz = round(pos.z);
-    float px = pos.x - nx;
+    //25.4  nx = 25
+    //25.6  nx = 26
+    std::cout<<"chunk: "<<chunk_index.p<<" "<<chunk_index.q<<std::endl;
+    std::cout<<"block: "<<block_index.x<<" "<<block_index.y<<" "<<block_index.z<<std::endl;
+    int nx = block_index.x + chunk_index.p * Chunk::ChunkBlockSizeX;
+    int ny = block_index.y;
+    int nz = block_index.z + chunk_index.q * Chunk::ChunkBlockSizeZ;
+    std::cout<<"nxyz "<<nx<<" "<<ny<<" "<<nz<<std::endl;
+    float px = pos.x + Chunk::ChunkPadding - nx;
     float py = pos.y - ny;
-    float pz = pos.z - nz;
+    float pz = pos.z + Chunk::ChunkPadding - nz;
     float pad = 0.25f;
     bool res = false;
     for(int dy = 0;dy < h;dy ++){
-        if(px < pad && isObstacle(chunk.queryBlockW(nx-1,ny-dy,nz))){
-            pos.x = nx + pad;
+        if(px < pad && isObstacle(chunk.queryBlockW(block_index.x-1,block_index.y-dy,block_index.z))){
+            pos.x = nx + pad - Chunk::ChunkPadding;
         }
-        if(px > -pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz))){
-            pos.x = nx - pad;
+        if(px > 1.f - pad && isObstacle(chunk.queryBlockW(block_index.x+1,block_index.y-dy,block_index.z))){
+            pos.x = nx + 1.f - pad - Chunk::ChunkPadding;
         }
-        if(pz < pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz-1))){
-            pos.z = nz + pad;
+        if(pz < pad && isObstacle(chunk.queryBlockW(block_index.x,block_index.y-dy,block_index.z-1))){
+            pos.z = nz + pad - Chunk::ChunkPadding;
         }
-        if(pz > -pad && isObstacle(chunk.queryBlockW(nx,ny-dy,nz))){
-            pos.z = nz - pad;
+        if(pz > 1.f - pad && isObstacle(chunk.queryBlockW(block_index.x,block_index.y-dy,block_index.z+1))){
+            pos.z = nz + 1.f - pad - Chunk::ChunkPadding;
+        }
+        if(py < pad && isObstacle(chunk.queryBlockW(block_index.x,block_index.y-dy-1,block_index.z))){
+            pos.y = ny + pad;
+            res = true;
+        }
+        if(py > 1.f - pad && isObstacle(chunk.queryBlockW(block_index.x,block_index.y-dy+1,block_index.z))){
+            pos.y = ny + 1.f - pad;
+            res = true;
         }
     }
+
     return res;
 }
 
