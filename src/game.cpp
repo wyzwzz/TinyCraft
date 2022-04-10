@@ -157,26 +157,37 @@ void Game::mainLoop(){
         last_t = cur_t;
         day_time = cur_t;
 //        std::cout<<"fps "<<int(1.0/delta_t)<<std::endl;
-
         glClearColor(0.f,0.f,0.f,0.f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-        handleMouseInput();
-        handleMovement(delta_t);
-
-        computeVisibleChunks();
-
+        {
+            // START_TIMER
+            handleMouseInput();
+            handleMovement(delta_t);
+            // STOP_TIMER("process input")
+        }
+        {
+            // START_TIMER
+            computeVisibleChunks();
+            // STOP_TIMER("compute visible chunks")
+        }
         //re-generate chunk draw buffer after input event
-        updateDirtyChunks();
+
+        {
+            // START_TIMER
+            updateDirtyChunks();
+            // STOP_TIMER("update dirty chunks")
+        }
+
+        {
+        //render selected cube wireframe by camera ray
+            // START_TIMER
+            renderHitBlock();
+            // STOP_TIMER("render hit block")
+        }
 
         auto view_matrix = camera.getViewMatrix();
         auto proj_matrix = camera.getProjMatrix();
         auto model_matrix = mat4(1.f);
-
-        //render selected cube wireframe by camera ray
-        renderHitBlock();
-
-
 
         shader.use();
         shader.setMat4("model",model_matrix);
@@ -299,7 +310,7 @@ void Game::handleMouseInput() {
 
 void Game::generateInitialWorld() {
     auto pos = camera.position;
-    auto r = camera.z_far;
+    auto r = camera.z_far*1.7f;
     BoundBox3D box = {
             pos-float3(r),
             pos+float3(r)
@@ -313,6 +324,14 @@ void Game::generateInitialWorld() {
         for(int q = min_chunk_q;q<=max_chunk_q;q++){
             createChunkAsync(p,q);
         }
+    }
+    for(auto& task:chunk_create_tasks){
+        if(task.second.joinable()){
+            task.second.join();
+        }
+    }
+    for(auto & chunk:chunks){
+        chunk.genVisibleFaceBuffer();
     }
 }
 /**
@@ -376,7 +395,8 @@ void Game::createChunk(int p, int q) {
             }
         }
     }
-//    chunk.generateVisibleFaces();
+
+    chunk.generateVisibleTriangles();
     std::lock_guard<std::mutex> lk(chunks_mtx);
     this->chunks.push_back(chunk);
 }
@@ -419,6 +439,10 @@ void Game::renderHitBlock() {
     Chunk::Index chunk_index{};
     Chunk::Block block_index{};
     if(!getHitBlock(chunk_index,block_index)) return;
+    Chunk::Index _chunk_index{};
+    Chunk::Block _block_index{};
+    computeChunkBlock(camera.position.x,camera.position.y,camera.position.z,_chunk_index,_block_index);
+    if(chunk_index == _chunk_index && block_index == _block_index) return;
 
     if(isPlant(block_index.w)) return;
 
@@ -542,11 +566,18 @@ void Game::onLeftClick() {
 }
 
 void Game::updateDirtyChunks() {
+    
     for(auto& chunk:chunks){
         if(chunk.isDirty()){
             chunk.generateVisibleFaces();
         }
+        else if(chunk.isUpdate()){
+            START_TIMER
+            chunk.genVisibleFaceBuffer();
+            STOP_TIMER("gen buffer")
+        }
     }
+    GL_EXPR(glFinish());
 }
 
 void Game::updateNeighborChunk(const Chunk::Index &chunk_index, const Chunk::Block &block_index) {
@@ -580,6 +611,7 @@ void Game::onRightClick() {
     Chunk::Index chunk_index{};
     Chunk::Block block_index{};
     int face = getHitBlockFace(chunk_index,block_index);
+    // std::cout<<"face "<<face<<std::endl;
     if(face == -1) return;
     if(isPlant(block_index.w)) return;//can not select plant
 
@@ -587,12 +619,30 @@ void Game::onRightClick() {
     Chunk::Block block{};
     computeBlockAccordingToFace(chunk_index,block_index,face,index,block);
     block.w = getCurrentItemIndex();
-    std::cout<<"new create block "<<block.x<<" "<<block.y<<" "<<block.z<<" "<<block.w<<std::endl;
+
+    // std::cout<<"index: "<<index.p<<" "<<index.q<<std::endl;
+    // std::cout<<"block: "<<block.x<<" "<<block.y<<" "<<block.z<<std::endl; 
+
     getChunk(index.p,index.q).setBlock(block);
     updateNeighborChunk(index,block);
+    Chunk::Index _index{};
+    Chunk::Block _block{};
+    
     auto pos = camera.position;
-    pos.y = pos.y - 0.001f;
-    if(collide(2,pos)){
+    computeChunkBlock(pos.x,pos.y,pos.z,_index,_block);
+    _block.w = block.w;
+    // std::cout<<"_index: "<<_index.p<<" "<<_index.q<<std::endl;
+    // std::cout<<"_block: "<<_block.x<<" "<<_block.y<<" "<<_block.z<<std::endl;
+
+    bool ok = true;
+    if((_index == index && _block == block) || (_index == index && _block.y == block.y + 1 && block.x == _block.x && block.z == _block.z)){
+        ok = false;
+    }
+
+    collide(2,pos);
+
+    if(!ok){
+        // std::cout<<"add will collide"<<std::endl;
         block.w = BLOCK_STATUS_EMPTY;
         getChunk(index.p,index.q).setBlock(block);
         updateNeighborChunk(index,block);
@@ -617,13 +667,13 @@ int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
         int w = getChunk(chunk_index_x,chunk_index_z).queryBlockW(block_index_x,block_index_y,block_index_z);
         if(w!=BLOCK_STATUS_EMPTY){
             if(i==0){
-                assert(false);
+                throw std::runtime_error("inside no empty block");
             }
             chunk_index = {chunk_index_x,chunk_index_z};
             block_index = {block_index_x,block_index_y,block_index_z,w};
-            int3 cur_world_pos = {(int)pos.x,(int)pos.y,(int)pos.z};
+            int3 cur_world_pos = {std::floor(pos.x),std::floor(pos.y),std::floor(pos.z)};
             pos = ray.origin + ray.direction * ray.step *static_cast<float>(i-1);
-            int3 last_world_pos = {(int)pos.x,(int)pos.y,(int)pos.z};
+            int3 last_world_pos = {std::floor(pos.x),std::floor(pos.y),std::floor(pos.z)};
             int3 offset = last_world_pos - cur_world_pos;
             if(offset.y == -1){
                 return 0;
@@ -632,6 +682,7 @@ int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
                 return 1;
             }
             else if(offset.x == 1){
+
                 return 2;
             }
             else if(offset.z == -1){
@@ -644,7 +695,8 @@ int Game::getHitBlockFace(Chunk::Index& chunk_index,Chunk::Block& block_index) {
                 return 5;
             }
             else{
-                throw std::runtime_error("error offset");
+                std::cout<<"error face"<<std::endl;
+                return -1;
             }
         }
     }
@@ -686,7 +738,8 @@ void Game::computeChunkBlock(float world_x, float world_y, float world_z,Chunk::
 void Game::drawItem() {
     mat4 model_matrix,view_matrix,proj_matrix;
     getItemMatrix(model_matrix,view_matrix,proj_matrix, isPlant(getCurrentItemIndex()));
-    shader.use();
+    shader.use();   
+    shader.setVec3("view_pos",float3{0.f,0.f,3.f});
     shader.setMat4("model",model_matrix);
     shader.setMat4("view",view_matrix);
     shader.setMat4("proj",proj_matrix);
@@ -731,7 +784,7 @@ void Game::createItemBuffer() {
     glBindVertexArray(item_vao);
     glCreateBuffers(1,&item_vbo);
     glBindBuffer(GL_ARRAY_BUFFER,item_vbo);
-    std::cout<<"sizeof Triangle: "<<triangles.size()<<std::endl;
+
     assert(sizeof(Triangle)==sizeof(float)*9*3);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
     glFinish();
@@ -843,7 +896,7 @@ void Game::computeVisibleChunks() {
             vis_chunks.push_back({p,q});
         }
     }
-    std::cout<<"visiable chunk count "<<vis_chunks.size()<<std::endl;
+    // std::cout<<"visiable chunk count "<<vis_chunks.size()<<std::endl;
     std::lock_guard<std::mutex> lk(chunks_mtx);
     for(auto& idx:vis_chunks)
         if(isChunkLoaded(idx.p,idx.q))
@@ -853,20 +906,26 @@ void Game::handleMovement(double dt)
 {
     dt = 1.0 / 60.0;
     static float dy = 0.f;
+    static float a = 0.f;
     auto op = camera.position;
     auto np = camera.position;
+    float3 front = camera.front;
+    if(!flying) front.y = 0.f;
+    front = normalize(front);
+    float3 right = camera.right;
+    if(!flying) right.y = 0.f;
+    right = normalize(right);
     if(glfwGetKey(window,'W')){
-        std::cout<<dt<<std::endl;
-        np += camera.front  ;
+        np += front  ;
     }
     if(glfwGetKey(window,'S')){
-        np -= camera.front  ;
+        np -= front  ;
     }
     if(glfwGetKey(window,'A')) {
-        np -= camera.right;
+        np -= right;
     }
     if(glfwGetKey(window,'D')){
-        np += camera.right  ;
+        np += right  ;
     }
     auto d = np - op;
     if(!flying)
@@ -874,11 +933,11 @@ void Game::handleMovement(double dt)
 
     if(glfwGetKey(window,' ')){
         if(flying){
-//            dy = 8.f;
+           dy = 0.f;
         }
         else{
-            if(dy == 0.f){
-                dy = 6.f;
+            if(dy == 0.f && a == 0.f){
+                dy = 5.f;
             }
         }
 
@@ -896,12 +955,19 @@ void Game::handleMovement(double dt)
             dy -= ut * 25;
             dy = (std::max)(dy, -250.f);
         }
+        
         op +=  d * ut * speed;
         op.y += dy * ut * speed;
         bool col = collide(2,op);
-        std::cout<<"op "<<op.x<<" "<<op.y<<" "<<op.z<<std::endl;
+        if(dy > 0.f){
+            a = 1.f;
+        }
+        else{
+            a = -1.f;
+        }
         if(col){
-            dy = 0;
+            dy = 0.f;
+            a = 0.f;
         }
     }
     camera.position = op;
@@ -981,7 +1047,7 @@ float Game::getDayLight() {
 }
 
 float Game::getDayTime() {
-    float t = day_time * 0.03;
+    float t = day_time * 0.003;
     t = t - (int)t;
     return t;
 }
@@ -1019,14 +1085,11 @@ bool Game::collide(int h,float3& pos) {
 
     auto& chunk = getChunk(chunk_index.p,chunk_index.q);
 
-    //25.4  nx = 25
-    //25.6  nx = 26
-    std::cout<<"chunk: "<<chunk_index.p<<" "<<chunk_index.q<<std::endl;
-    std::cout<<"block: "<<block_index.x<<" "<<block_index.y<<" "<<block_index.z<<std::endl;
+
     int nx = block_index.x + chunk_index.p * Chunk::ChunkBlockSizeX;
     int ny = block_index.y;
     int nz = block_index.z + chunk_index.q * Chunk::ChunkBlockSizeZ;
-    std::cout<<"nxyz "<<nx<<" "<<ny<<" "<<nz<<std::endl;
+
     float px = pos.x + Chunk::ChunkPadding - nx;
     float py = pos.y - ny;
     float pz = pos.z + Chunk::ChunkPadding - nz;

@@ -22,7 +22,7 @@ public:
     float zoom{65.f};//15.f
     float3 world_up{0.f,1.f,0.f};
     float move_sense{0.05f};
-    float move_speed{3.f};
+    float move_speed{3.6f};
     static constexpr float aspect = static_cast<float>(ScreenWidth)/static_cast<float>(ScreenHeight);
 
 };

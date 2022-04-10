@@ -15,6 +15,16 @@ void Chunk::setBlock(const Chunk::Block &block) {
 bool Chunk::isDirty() const {
     return dirty;
 }
+bool Chunk::isUpdate() const{
+    return update;
+}
+void Chunk::setDirty(bool dirty){
+    this->dirty = dirty;
+    if(!dirty){
+        this->dirty_count = 0;
+    }
+}
+
 /*
  *                y
  *                |
@@ -107,9 +117,15 @@ void occlusion(bool neighbor[27],float shades[27],float ao[6][4]){
 }
 #define XYZ(x,y,z) ((y) * ChunkSizeX * ChunkSizeZ + (z) * ChunkSizeX + (x))
 #define XZ(x,z) ((z) * ChunkSizeX + (x))
-void Chunk::generateVisibleFaces() {
+
+void Chunk::generateVisibleTriangles(){
+    generateVisibleTriangles(this->triangles);
+    this->update = true;
+    setDirty(false);
+}
+
+void Chunk::generateVisibleTriangles(std::vector<Triangle>& visible_triangles){
     this->visible_face_num = 0;
-    std::vector<Triangle> visible_triangles;
     std::vector<bool> opaque(ChunkSize,false);
     std::vector<uint8_t> highest(ChunkSizeX*ChunkSizeZ,0);
 
@@ -176,6 +192,11 @@ void Chunk::generateVisibleFaces() {
 
         visible_triangles.insert(visible_triangles.end(),gen_triangles.begin(),gen_triangles.end());
     }
+}
+
+void Chunk::generateVisibleFaces() {
+    std::vector<Triangle> visible_triangles;
+    generateVisibleTriangles(visible_triangles);
     genVisibleFaceBuffer(visible_triangles);
 
     //reset dirty to false
@@ -192,14 +213,19 @@ bool Chunk::isBoundary(const Map::MapEntry& block_index) {
 bool Chunk::isBase(const Chunk::Block &block) {
     return block.y == 0;
 }
-
+void Chunk::genVisibleFaceBuffer(){
+    genVisibleFaceBuffer(this->triangles);
+    this->triangles.clear();
+    this->update = false;
+}
 void Chunk::genVisibleFaceBuffer(const std::vector<Triangle>& triangles) {
     if(draw_vao!=0 || draw_buffer!=0){
         deleteDrawBuffer();
     }
-    GL_EXPR(glCreateVertexArrays(1,&draw_vao));
+
+    GL_EXPR(glGenVertexArrays(1,&draw_vao));
     glBindVertexArray(draw_vao);
-    glCreateBuffers(1,&draw_buffer);
+    glGenBuffers(1,&draw_buffer);
     glBindBuffer(GL_ARRAY_BUFFER,draw_buffer);
     glBufferData(GL_ARRAY_BUFFER,triangles.size()*sizeof(Triangle),triangles.data(),GL_STATIC_DRAW);
     GL_CHECK

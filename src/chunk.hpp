@@ -72,6 +72,10 @@ class Chunk{
         //if need to re-generate mesh buffer
         bool isDirty() const;
 
+        bool isUpdate() const;
+
+        void setDirty(bool dirty);
+
         //if is modified since create, also meanings if need to store it into db
         bool isModified() const;
 
@@ -82,6 +86,14 @@ class Chunk{
 
         //must call after call setBlock or isDirty return true
         void generateVisibleFaces();
+
+        void generateVisibleTriangles(std::vector<Triangle>& triangles);
+
+        void generateVisibleTriangles();
+
+        void genVisibleFaceBuffer(const std::vector<Triangle>&);
+
+        void genVisibleFaceBuffer();
 
         int getHighest(int x,int z);
 
@@ -108,17 +120,19 @@ class Chunk{
 
     private:
 
-    void genVisibleFaceBuffer(const std::vector<Triangle>&);
+    
 
     private:
         BoundBox3D bbox;
         Index chunk_index;
         bool dirty{false};
         int dirty_count{0};
+        bool update = false;
         Map block_map;
         int visible_face_num{0};
         uint32_t draw_buffer{0};
         uint32_t draw_vao{0};
+        std::vector<Triangle> triangles;
 };
 
 

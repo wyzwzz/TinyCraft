@@ -81,6 +81,7 @@ private:
         //use list because of frequent operation for append and delete
         //there is no random access but access by iterate
         std::list<Chunk> chunks;//todo replace with lru
+        //chunk如果太多 每个chunk生成的buffer会一直保留 从而导致GPU显存爆满
         std::mutex chunks_mtx;
         std::list<std::pair<Chunk::Index,std::thread>> chunk_create_tasks;
         std::mutex mtx;
