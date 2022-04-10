@@ -85,6 +85,7 @@ void Game::initGLContext(){
     glEnable(GL_CULL_FACE);
     glDepthFunc(GL_LEQUAL);//defualt is GL_LESS, this is for skybox trick
     //todo select nvidia gpu
+    glLogicOp(GL_INVERT);
 }
 
 void Game::initEventHandle(){
@@ -178,12 +179,6 @@ void Game::mainLoop(){
             // STOP_TIMER("update dirty chunks")
         }
 
-        {
-        //render selected cube wireframe by camera ray
-            // START_TIMER
-            renderHitBlock();
-            // STOP_TIMER("render hit block")
-        }
 
         auto view_matrix = camera.getViewMatrix();
         auto proj_matrix = camera.getProjMatrix();
@@ -212,8 +207,14 @@ void Game::mainLoop(){
 //            glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
             glDrawArrays(GL_TRIANGLES,0,draw_num);
         }
-
+        {
+        //render selected cube wireframe by camera ray
+            // START_TIMER
+            renderHitBlock();
+            // STOP_TIMER("render hit block")
+        }
         drawSkyBox();
+
 
         glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -454,7 +455,9 @@ void Game::renderHitBlock() {
     wireframe_shader.setMat4("proj",proj_matrix);
     glBindVertexArray(block_wireframe_vao);
     glLineWidth(1);
+    glEnable(GL_COLOR_LOGIC_OP);
     glDrawArrays(GL_LINES,0,24);
+    glDisable(GL_COLOR_LOGIC_OP);
 }
 
 void Game::generateHitBlockBuffer(const Chunk::Index& chunk_index,const Chunk::Block& block_index) {
@@ -841,7 +844,9 @@ void Game::drawCrossChair() {
     wireframe_shader.setMat4("proj",proj);
     glBindVertexArray(cross_chair_vao);
     glLineWidth(3.f);
+    glEnable(GL_COLOR_LOGIC_OP);
     glDrawArrays(GL_LINES,0,4);
+    glDisable(GL_COLOR_LOGIC_OP);
     glBindVertexArray(0);
 
 }
